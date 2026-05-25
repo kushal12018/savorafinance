@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
-const savoraLogo = "/src/assets/images/savora_finance_logo_1779737512814.png";
+import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
 
 interface SavoraWaitlistProps {
   isOpen: boolean;
@@ -101,14 +101,23 @@ export default function SavoraWaitlist({
 
     setSubmitting(true);
 
+    // XSS injection prevention and data sanitization
+    const sanitizeInput = (val: string) => {
+      return val.replace(/[<>]/g, "").trim();
+    };
+
+    const sanitizedEmail = sanitizeInput(formData.emailId).toLowerCase();
+    const sanitizedPhone = sanitizeInput(formData.mobileNumber);
+    const sanitizedName = sanitizeInput(formData.fullName);
+
     // Perform database uniqueness checks before committing waitlist insertion
     if (isSupabaseConfigured && supabase) {
       try {
-        // Check for duplicate emailId
+        // Check for duplicate emailId case-insensitively
         const { data: duplicateEmail, error: emailErr } = await supabase
           .from("waitlist")
           .select("email_id")
-          .eq("email_id", formData.emailId.trim());
+          .ilike("email_id", sanitizedEmail);
 
         if (emailErr) {
           console.error("Database email uniqueness check failed:", emailErr.message);
@@ -125,7 +134,7 @@ export default function SavoraWaitlist({
         const { data: duplicatePhone, error: phoneErr } = await supabase
           .from("waitlist")
           .select("mobile_number")
-          .eq("mobile_number", formData.mobileNumber.trim());
+          .eq("mobile_number", sanitizedPhone);
 
         if (phoneErr) {
           console.error("Database mobile uniqueness check failed:", phoneErr.message);
@@ -146,7 +155,9 @@ export default function SavoraWaitlist({
     const secureCode = `SAV-NODE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     
     const payload = {
-      ...formData,
+      fullName: sanitizedName,
+      mobileNumber: sanitizedPhone,
+      emailId: sanitizedEmail,
       registeredAt: new Date().toLocaleDateString("en-IN", {
         day: "numeric",
         month: "short",
@@ -162,9 +173,9 @@ export default function SavoraWaitlist({
           .from("waitlist")
           .insert([
             {
-              full_name: formData.fullName,
-              mobile_number: formData.mobileNumber,
-              email_id: formData.emailId,
+              full_name: sanitizedName,
+              mobile_number: sanitizedPhone,
+              email_id: sanitizedEmail,
               queue_position: randomSeed,
               secure_code: secureCode
             }

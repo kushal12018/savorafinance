@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Send, Bot, User, X, Landmark, Compass, HelpCircle, Loader2 } from "lucide-react";
 import { ChatMessage } from "../types";
 
-const savoraLogo = "/src/assets/images/savora_finance_logo_1779737512814.png";
+import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
 
 interface SavoraAdvisorProps {
   isOpen: boolean;

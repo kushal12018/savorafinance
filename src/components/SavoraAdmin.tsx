@@ -27,7 +27,7 @@ import {
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
 // Reference generated logo asset path
-const savoraLogo = "/src/assets/images/savora_finance_logo_1779737512814.png";
+import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
 
 // Permitted admin whitelist parameters
 const PERMITTED_ADMINS = ["ckushal120@gmail.com", "ssonvir459@gmail.com"];
@@ -119,6 +119,41 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
     }
   }, [isOpen]);
 
+  // Automated background active admin session synchronization
+  useEffect(() => {
+    if (isOpen && isSupabaseConfigured && supabase) {
+      const checkSession = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const userEmail = session.user.email?.toLowerCase().trim();
+            if (userEmail && PERMITTED_ADMINS.includes(userEmail)) {
+              setEmail(userEmail);
+              setIsAuthenticated(true);
+              setSuccessMessage("INTEGRITY CONFIRMED: Administrative session automatically synchronized.");
+              setLoadingRecords(true);
+              const { data, error } = await supabase
+                .from("waitlist")
+                .select("*")
+                .order("id", { ascending: false });
+              if (!error && data) {
+                setRecords(data);
+              }
+              setLoadingRecords(false);
+            } else {
+              // Not a permitted custodian admin, forcibly sign them out for absolute security
+              await supabase.auth.signOut();
+              setIsAuthenticated(false);
+            }
+          }
+        } catch (e) {
+          console.error("Session verification bypass attempt:", e);
+        }
+      };
+      checkSession();
+    }
+  }, [isOpen]);
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -176,6 +211,13 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
 
     const token = otp.trim();
     const targetEmail = email.trim().toLowerCase();
+
+    // Security check: Defensive-in-depth whitelist enforcement
+    if (!PERMITTED_ADMINS.includes(targetEmail)) {
+      setErrorMessage("ACCESS COMPROMISED: This email address is not registered as an authorized advisory node custodian.");
+      setSubmittingOtp(false);
+      return;
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -603,7 +645,14 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
               </span>
               {isAuthenticated && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    if (isSupabaseConfigured && supabase) {
+                      try {
+                        await supabase.auth.signOut();
+                      } catch (err) {
+                        console.error("Error signing out:", err);
+                      }
+                    }
                     setIsAuthenticated(false);
                     setVerificationPending(false);
                     setOtp("");

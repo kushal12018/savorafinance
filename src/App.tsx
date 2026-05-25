@@ -36,10 +36,10 @@ import SavoraWaitlist from "./components/SavoraWaitlist";
 import SavoraAdmin from "./components/SavoraAdmin";
 
 // Reference generated cinematic asset path
-const heroVisualAsset = "/src/assets/images/savora_hero_visual_1779736420017.png";
+import heroVisualAsset from "./assets/images/savora_hero_visual_1779736420017.png";
 
 // Reference generated logo asset path
-const savoraLogo = "/src/assets/images/savora_finance_logo_1779737512814.png";
+import savoraLogo from "./assets/images/savora_finance_logo_1779737512814.png";
 
 // Features configuration data
 const FEATURES: FeatureItem[] = [

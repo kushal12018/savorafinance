@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ShieldCheck, Sparkles } from "lucide-react";
 
 // Reference generated logo asset path
-const savoraLogo = "/src/assets/images/savora_finance_logo_1779737512814.png";
+import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
 
 interface PreloaderProps {
   onComplete: () => void;
