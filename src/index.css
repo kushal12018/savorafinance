@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;450;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-matte-black: #0D0D0D;
+  --color-emerald-green: #00C896;
+  --color-gold-accent: #F5C15C;
+  --color-soft-white: #F8F8F8;
+}
+
+body {
+  background-color: #0D0D0D;
+  color: #F8F8F8;
+  font-family: var(--font-sans);
+}
+
+/* Glassmorphism custom components */
+.glass-panel {
+  background: rgba(20, 20, 20, 0.65);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-heavy {
+  background: rgba(13, 13, 13, 0.85);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 200, 150, 0.3);
+  box-shadow: 0 0 30px rgba(0, 200, 150, 0.15);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 40px rgba(0, 200, 150, 0.25);
+}
+
+.glow-gold {
+  box-shadow: 0 0 40px rgba(245, 193, 92, 0.25);
+}
+
+/* Smooth background floaters styling */
+@keyframes float {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-20px) scale(1.05); }
+  100% { transform: translateY(0px) scale(1); }
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 12s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+/* Custom sleek scrollbars for list grids */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0D0D0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F1F1F;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2D2D2D;
+}
+
+/* 3D Spatial Environment Utilities */
+.perspective-container {
+  perspective: 1200px;
+  perspective-origin: center;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.shadow-3d-glowing {
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8),
+              0 0 50px -5px rgba(0, 200, 150, 0.15),
+              0 0 20px -2px rgba(245, 193, 92, 0.1);
+}
+
+.shadow-card-3d {
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.61);
+}
+
+.transition-3d {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes spin-slow-3d {
+  0% {
+    transform: rotateY(0deg) rotateX(12deg);
+  }
+  50% {
+    transform: rotateY(180deg) rotateX(15deg);
+  }
+  100% {
+    transform: rotateY(360deg) rotateX(12deg);
+  }
+}
+
+.animate-spin-3d {
+  animation: spin-slow-3d 25s linear infinite;
+}
+
+
+

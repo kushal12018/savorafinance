@@ -1,0 +1,6 @@
+{
+  "name": "Savora Finance Private Limited",
+  "description": "Luxurious, futuristic wealth-building platform featuring AI-powered savings tracking, automated investments, and cinematic glassmorphism visual dashboards for Savora Finance Private Limited.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
