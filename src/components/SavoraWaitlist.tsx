@@ -256,7 +256,7 @@ export default function SavoraWaitlist({
                 <>
                   <div className="space-y-2">
                     <h4 className="font-serif text-2xl font-extrabold text-white tracking-tight">
-                      Join Savora Private Limited Waitlist
+                      Join Savora Finance Private Limited Waitlist
                     </h4>
                     <p className="text-zinc-400 text-xs font-light leading-relaxed">
                       Savora compounds micro-savings using high-yield sovereign notes. Enter your details to reserve your priority yield slot in the next ledger rollout sequence.

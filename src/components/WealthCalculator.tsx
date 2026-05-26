@@ -7,6 +7,8 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion } from "motion/react";
 import { TrendingUp, Coins, Sparkles, Scale, Info, ArrowUpRight, Flame } from "lucide-react";
 import { InvestmentSimulationSettings } from "../types";
+import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
+import Perspective3D from "./Perspective3D";
 
 export default function WealthCalculator() {
   const [settings, setSettings] = useState<InvestmentSimulationSettings>({
@@ -142,6 +144,49 @@ export default function WealthCalculator() {
     return calculations.yearlyData.find(d => d.year === hoveredYear) || null;
   }, [hoveredYear, calculations]);
 
+  const growthPhase = useMemo(() => {
+    const y = settings.durationYears;
+    if (y <= 7) {
+      return {
+        name: "Foundation Phase",
+        desc: "Laying original assets. Compound growth rises gently under initial momentum.",
+        color: "text-zinc-400",
+        barColor: "bg-zinc-500",
+        badge: "bg-zinc-500/10 border border-zinc-500/20",
+        icon: Scale,
+      };
+    } else if (y <= 15) {
+      return {
+        name: "Capital Accumulation",
+        desc: "Ignition point. Compound yields start driving noticeable portfolio weight.",
+        color: "text-emerald-green",
+        barColor: "bg-emerald-green",
+        badge: "bg-emerald-green/10 border border-emerald-green/20",
+        icon: TrendingUp,
+      };
+    } else if (y <= 23) {
+      return {
+        name: "Velocity Synergy",
+        desc: "Exponential surge! Yearly gains begin outstripping continuous monthly savings deposits.",
+        color: "text-gold-accent",
+        barColor: "bg-gold-accent",
+        badge: "bg-gold-accent/10 border border-gold-accent/20",
+        icon: Sparkles,
+      };
+    } else {
+      return {
+        name: "Sovereign Harvest",
+        desc: "Parabolic maturity. Absolute interest generation fuels self-sustaining asset loops.",
+        color: "text-rose-400",
+        barColor: "bg-gradient-to-r from-gold-accent to-rose-400",
+        badge: "bg-rose-500/10 border border-rose-500/20",
+        icon: Flame,
+      };
+    }
+  }, [settings.durationYears]);
+
+  const yearsPercent = ((settings.durationYears - 1) / 29) * 100;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch" id="estimator_calculator_root">
       {/* LEFT COLUMN: Controls & Sliders */}
@@ -221,24 +266,69 @@ export default function WealthCalculator() {
               </div>
             </div>
 
-            {/* Investment Duration */}
-            <div className="space-y-2">
+            {/* Investment Duration with Custom Progress & Growth Phase Indicator */}
+            <div className="space-y-3.5 p-4 bg-white/[0.02] border border-white/5 rounded-2xl relative overflow-hidden transition-all duration-300">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-400 font-medium">Time Horizon</span>
-                <span className="text-white font-sans font-bold">{settings.durationYears} Years</span>
+                <span className="text-zinc-400 font-medium font-sans">Time Horizon</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${growthPhase.badge} ${growthPhase.color} transition-all duration-300`}>
+                    {settings.durationYears} Years
+                  </span>
+                </div>
               </div>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                step="1"
-                value={settings.durationYears}
-                onChange={(e) => setSettings({ ...settings, durationYears: Number(e.target.value) })}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white animate-pulse"
-              />
-              <div className="flex justify-between text-[9px] font-mono text-zinc-500">
-                <span>1 Year</span>
-                <span>30 Years</span>
+              
+              <div className="relative pt-1">
+                {/* Custom Glowing visual progress bar that matches the years slider */}
+                <div className="absolute left-0 top-[11.5px] h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden pointer-events-none">
+                  <motion.div 
+                    className={`h-full ${growthPhase.barColor} rounded-full`}
+                    initial={false}
+                    animate={{ width: `${yearsPercent}%` }}
+                    transition={{ type: "spring", stiffness: 150, damping: 20 }}
+                  />
+                </div>
+
+                {/* Years slider custom layout to make it highly immersive */}
+                <input
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={settings.durationYears}
+                  onChange={(e) => setSettings({ ...settings, durationYears: Number(e.target.value) })}
+                  className="w-full h-1.5 opacity-80 hover:opacity-100 bg-transparent rounded-lg appearance-none cursor-pointer accent-white relative z-20 transition-all duration-150"
+                  style={{
+                    WebkitAppearance: "none",
+                  }}
+                />
+              </div>
+              
+              {/* Slider marker ticks to delineate progression epochs */}
+              <div className="flex justify-between items-center text-[8px] font-mono text-zinc-500 px-0.5 select-none">
+                <span className={settings.durationYears >= 1 ? "text-zinc-400 font-bold transition-colors" : "transition-colors"}>1 Yr</span>
+                <span className={settings.durationYears >= 8 ? "text-emerald-green font-bold transition-colors" : "transition-colors"}>8 Yrs</span>
+                <span className={settings.durationYears >= 16 ? "text-gold-accent font-bold transition-colors" : "transition-colors"}>16 Yrs</span>
+                <span className={settings.durationYears >= 24 ? "text-rose-400 font-bold transition-colors" : "transition-colors"}>30 Yrs</span>
+              </div>
+
+              {/* Dynamic Phase Visualization Card with staggered entry anims & glow */}
+              <div className="pt-3 border-t border-white/[0.04] transition-all duration-300">
+                <div className="flex items-start gap-2.5">
+                  <span className={`p-1.5 rounded-lg bg-white/[0.03] border border-white/5 ${growthPhase.color} transition-colors duration-300`}>
+                    <growthPhase.icon className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="space-y-0.5 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500">Growth Epoch</span>
+                      <span className={`text-[10px] font-sans font-black ${growthPhase.color} transition-colors duration-300`}>
+                        {growthPhase.name}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 leading-normal font-light">
+                      {growthPhase.desc}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -260,7 +350,7 @@ export default function WealthCalculator() {
       <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-12 gap-6">
         
         {/* Dynamic SVG Area Chart Screen */}
-        <div className="md:col-span-8 bg-black/40 backdrop-blur-md p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between">
+        <Perspective3D maxTilt={6} scale={1.012} className="md:col-span-8 bg-black/40 backdrop-blur-md p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden" id="projection_matrix_3d_panel">
           <div>
             <div className="flex justify-between items-start">
               <div className="space-y-1">
@@ -376,10 +466,10 @@ export default function WealthCalculator() {
               <span className="text-lg font-bold text-emerald-green font-mono tracking-tight">+{formatCurrency(calculations.finalInterest)}</span>
             </div>
           </div>
-        </div>
+        </Perspective3D>
 
         {/* DYNAMIC HOLOGRAPHIC GLASS JAR FILLING WITH COINS */}
-        <div className="md:col-span-4 bg-gradient-to-b from-white/[0.04] to-transparent p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden relative group">
+        <Perspective3D maxTilt={10} scale={1.03} className="md:col-span-4 bg-gradient-to-b from-white/[0.04] to-transparent p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden relative group" id="savora_jar_3d_panel">
           {/* subtle ambient background pulse */}
           <div className="absolute inset-x-0 -top-10 h-24 bg-gradient-to-b from-emerald-green/10 to-transparent blur-xl pointer-events-none" />
 
@@ -494,9 +584,15 @@ export default function WealthCalculator() {
               <line x1="38" y1="26" x2="102" y2="26" stroke="#FFFFFF" strokeOpacity="0.25" strokeWidth="1.5" />
               <line x1="34" y1="31" x2="106" y2="31" stroke="#FFFFFF" strokeOpacity="0.2" strokeWidth="1" />
 
-              {/* Holographic Savora Brand Seal On Jar */}
-              <circle cx="70" cy="100" r="14" fill="#0D0D0D" fillOpacity="0.75" stroke="#00C896" strokeWidth="1" strokeOpacity="0.3" />
-              <text x="70" y="104" textAnchor="middle" fill="#00C896" fontSize="12" fontWeight="bold" fontFamily="var(--font-serif)" letterSpacing="-0.5">S</text>
+              {/* Holographic Savora Brand Seal On Jar featuring backgroundless brand logo */}
+              <image
+                href={savoraLogo}
+                x="50"
+                y="80"
+                width="40"
+                height="40"
+                className="pointer-events-none drop-shadow-[0_2px_12px_rgba(0,300,150,0.4)]"
+              />
 
               {/* Glass light reflection flare highlight */}
               <path
@@ -513,7 +609,7 @@ export default function WealthCalculator() {
             <span className="text-base font-bold text-white font-mono tracking-wide">{formatCurrency(calculations.finalAmount)}</span>
             <span className="block text-[8px] font-mono text-zinc-400 capitalize">In {settings.durationYears} target years</span>
           </div>
-        </div>
+        </Perspective3D>
 
       </div>
     </div>

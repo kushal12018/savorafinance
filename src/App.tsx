@@ -34,6 +34,7 @@ import SavoraAdvisor from "./components/SavoraAdvisor";
 import ThreeDVault from "./components/ThreeDVault";
 import SavoraWaitlist from "./components/SavoraWaitlist";
 import SavoraAdmin from "./components/SavoraAdmin";
+import Perspective3D from "./components/Perspective3D";
 
 // Reference generated cinematic asset path
 import heroVisualAsset from "./assets/images/savora_hero_visual_1779736420017.png";
@@ -361,8 +362,11 @@ export default function App() {
 
             {/* HERO VISUAL: DETAILED CINEMATIC PORTFOLIO DISPLAY COINS CONTAINER */}
             <div className="lg:col-span-6 relative w-full flex justify-center lg:justify-end">
-              <div className="relative max-w-lg w-full aspect-16/9 rounded-[32px] overflow-hidden border border-white/10 shadow-3xl bg-[#090909]/40 group p-1 backdrop-blur-md">
-                
+              <Perspective3D
+                maxTilt={8}
+                scale={1.02}
+                className="relative max-w-lg w-full aspect-16/9 rounded-[32px] overflow-hidden border border-white/10 shadow-3xl bg-[#090909]/40 group p-1 backdrop-blur-md"
+              >
                 {/* Visual Glassmorphic overlay rails */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent z-10 pointer-events-none" />
                 <div className="absolute top-4 left-4 z-20 flex gap-2">
@@ -391,7 +395,7 @@ export default function App() {
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover rounded-[28px] scale-100 group-hover:scale-[1.02] transition-transform duration-[6000ms] ease-out"
                 />
-              </div>
+              </Perspective3D>
             </div>
 
           </div>
@@ -453,44 +457,49 @@ export default function App() {
                       key={item.id}
                       initial={{ opacity: 0, scale: 0.98 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className={`glass-panel p-6 sm:p-8 rounded-[32px] border ${item.glowColor} flex flex-col justify-between space-y-8 text-left relative overflow-hidden`}
                     >
-                      <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-emerald-green/5 to-transparent blur-2xl pointer-events-none" />
+                      <Perspective3D
+                        maxTilt={5}
+                        scale={1.01}
+                        className={`glass-panel p-6 sm:p-8 rounded-[32px] border ${item.glowColor} flex flex-col justify-between space-y-8 text-left relative overflow-hidden`}
+                      >
+                        <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-emerald-green/5 to-transparent blur-2xl pointer-events-none" />
 
-                      <div className="space-y-4 relative z-10">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[9px] font-mono text-emerald-green uppercase tracking-widest font-black block">Active Module Status: Online</span>
-                          <span className="h-2 w-2 rounded-full bg-emerald-green animate-pulse" />
-                        </div>
-                        <h3 className="font-serif text-2.5xl font-black text-white leading-tight">
-                          {item.title}
-                        </h3>
-                        <p className="text-zinc-400 text-xs sm:text-sm font-light leading-relaxed max-w-2xl">
-                          {item.description}
-                        </p>
-                      </div>
-
-                      {/* Detail points specifications inside Feature */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-white/5 relative z-10">
-                        {item.details.map((detail, idx) => (
-                          <div key={idx} className="flex items-center gap-2.5 text-xs text-zinc-300">
-                            <span className="p-1 rounded-md bg-emerald-green/10 border border-emerald-green/20 text-emerald-green">
-                              <Check className="h-3 w-3" />
-                            </span>
-                            <span className="font-sans">{detail}</span>
+                        <div className="space-y-4 relative z-10">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-mono text-emerald-green uppercase tracking-widest font-black block">Active Module Status: Online</span>
+                            <span className="h-2 w-2 rounded-full bg-emerald-green animate-pulse" />
                           </div>
-                        ))}
-                      </div>
+                          <h3 className="font-serif text-2.5xl font-black text-white leading-tight">
+                            {item.title}
+                          </h3>
+                          <p className="text-zinc-400 text-xs sm:text-sm font-light leading-relaxed max-w-2xl">
+                            {item.description}
+                          </p>
+                        </div>
 
-                      <div className="pt-4 flex justify-between items-center relative z-10">
-                        <button
-                          onClick={() => setAdvisorOpen(true)}
-                          className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-emerald-green hover:text-white transition-all font-bold cursor-pointer"
-                        >
-                          Instruct Savora Wealthmind regarding this <ArrowUpRight className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="text-[8px] font-mono text-zinc-600 uppercase font-bold tracking-widest">SVR-REF-0{item.id.toUpperCase()}</span>
-                      </div>
+                        {/* Detail points specifications inside Feature */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-white/5 relative z-10">
+                          {item.details.map((detail, idx) => (
+                            <div key={idx} className="flex items-center gap-2.5 text-xs text-zinc-300">
+                              <span className="p-1 rounded-md bg-emerald-green/10 border border-emerald-green/20 text-emerald-green">
+                                <Check className="h-3 w-3" />
+                              </span>
+                              <span className="font-sans">{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-4 flex justify-between items-center relative z-10">
+                          <button
+                            onClick={() => setAdvisorOpen(true)}
+                            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-emerald-green hover:text-white transition-all font-bold cursor-pointer"
+                          >
+                            Instruct Savora Wealthmind regarding this <ArrowUpRight className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-[8px] font-mono text-zinc-600 uppercase font-bold tracking-widest">SVR-REF-0{item.id.toUpperCase()}</span>
+                        </div>
+                      </Perspective3D>
                     </motion.div>
                   );
                 })}
@@ -535,9 +544,11 @@ export default function App() {
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {STATS.map((stat) => (
-                <div
+                <Perspective3D
                   key={stat.id}
-                  className="bg-white/[0.02] border border-white/5 p-6 rounded-2xl flex flex-col justify-between space-y-4 text-left"
+                  maxTilt={12}
+                  scale={1.04}
+                  className="bg-white/[0.02] border border-white/5 p-6 rounded-2xl flex flex-col justify-between space-y-4 text-left overflow-hidden"
                 >
                   <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block font-bold leading-none">{stat.label}</span>
                   <div className="space-y-1">
@@ -546,7 +557,7 @@ export default function App() {
                     </h3>
                     <p className="text-[10px] text-zinc-400 font-light leading-none">{stat.subtext}</p>
                   </div>
-                </div>
+                </Perspective3D>
               ))}
             </div>
           </div>
@@ -573,9 +584,11 @@ export default function App() {
             {/* Testimonials grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {TESTIMONIALS.map((t) => (
-                <div
+                <Perspective3D
                   key={t.id}
-                  className="glass-panel p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-6 text-left group"
+                  maxTilt={8}
+                  scale={1.03}
+                  className="glass-panel p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-6 text-left group overflow-hidden"
                 >
                   <div className="space-y-4">
                     {/* Star Rating & Growth banner */}
@@ -608,7 +621,7 @@ export default function App() {
                       <span className="text-[10px] text-zinc-500 font-mono block leading-none mt-0.5">{t.role}</span>
                     </div>
                   </div>
-                </div>
+                </Perspective3D>
               ))}
             </div>
 

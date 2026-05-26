@@ -118,11 +118,15 @@ export default function ThreeDVault() {
   const [activeTabLayer, setActiveTabLayer] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [rotationOnStart, setRotationOnStart] = useState<{ x: number; y: number }>({ x: 18, y: -22 });
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Smooth rotational loop
   useEffect(() => {
-    if (!autoRotate) return;
+    if (!autoRotate || isDragging) return;
     
     const interval = setInterval(() => {
       setRotY((prev) => {
@@ -133,23 +137,44 @@ export default function ThreeDVault() {
     }, 30);
 
     return () => clearInterval(interval);
-  }, [autoRotate]);
+  }, [autoRotate, isDragging]);
 
-  // Subtle interactive shadow mouse trigger
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (autoRotate) return; // Only manual tilt if auto-rotate is toggled off
-    if (!containerRef.current) return;
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setAutoRotate(false);
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setRotationOnStart({ x: rotX, y: rotY });
+  };
 
-    const bounds = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - bounds.left;
-    const mouseY = e.clientY - bounds.top;
+  const handleMouseMoveWithDrag = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+      
+      const sensitivity = 0.55;
+      const targetY = rotationOnStart.y + deltaX * sensitivity;
+      const targetX = Math.max(-55, Math.min(65, rotationOnStart.x - deltaY * sensitivity));
+      
+      setRotX(Number(targetX.toFixed(1)));
+      setRotY(Number(targetY.toFixed(1)));
+    } else {
+      if (autoRotate) return;
+      if (!containerRef.current) return;
 
-    // Convert mouse coordinates to tilt indices (-25deg to 25deg)
-    const factorX = (mouseY / bounds.height - 0.5) * 45;
-    const factorY = (mouseX / bounds.width - 0.5) * -45;
+      const bounds = containerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - bounds.left;
+      const mouseY = e.clientY - bounds.top;
 
-    setRotX(Number(factorX.toFixed(1)));
-    setRotY(Number(factorY.toFixed(1)));
+      const factorX = (mouseY / bounds.height - 0.5) * 45;
+      const factorY = (mouseX / bounds.width - 0.5) * -45;
+
+      setRotX(Number(factorX.toFixed(1)));
+      setRotY(Number(factorY.toFixed(1)));
+    }
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
   };
 
   const currentThemeColor = 
@@ -322,10 +347,13 @@ export default function ThreeDVault() {
           
           {/* Main 3D Container Stage */}
           <div 
-            className="perspective-container relative w-full aspect-square sm:aspect-[4/3] max-w-lg rounded-3xl border border-white/5 bg-[#080808]/40 p-4 flex items-center justify-center overflow-hidden h-[330px] sm:h-[400px]"
-            onMouseMove={handleMouseMove}
+            className="perspective-container relative w-full aspect-square sm:aspect-[4/3] max-w-lg rounded-3xl border border-white/5 bg-[#080808]/40 p-4 flex items-center justify-center overflow-hidden h-[330px] sm:h-[400px] select-none cursor-grab active:cursor-grabbing"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMoveWithDrag}
+            onMouseUp={handleMouseUpOrLeave}
             onMouseLeave={() => {
-              if (!autoRotate) {
+              handleMouseUpOrLeave();
+              if (!autoRotate && !isDragging) {
                 setRotX(18);
                 setRotY(-22);
               }
