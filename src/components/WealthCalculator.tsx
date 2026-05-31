@@ -346,11 +346,11 @@ export default function WealthCalculator() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Holographic Dashboard (SVG Area Chart + The Animated Glass Jar) */}
-      <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-12 gap-6">
+      {/* RIGHT COLUMN: Holographic Dashboard (SVG Area Chart) */}
+      <div className="lg:col-span-7 flex flex-col gap-6">
         
         {/* Dynamic SVG Area Chart Screen */}
-        <Perspective3D maxTilt={6} scale={1.012} className="md:col-span-8 bg-black/40 backdrop-blur-md p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden" id="projection_matrix_3d_panel">
+        <Perspective3D maxTilt={6} scale={1.012} className="w-full bg-black/40 backdrop-blur-md p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden" id="projection_matrix_3d_panel">
           <div>
             <div className="flex justify-between items-start">
               <div className="space-y-1">
@@ -455,8 +455,8 @@ export default function WealthCalculator() {
             </div>
           </div>
 
-          {/* Core financial numbers */}
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/5">
+          {/* Core financial numbers (Consolidated 3-Column stats readout) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5">
             <div className="space-y-0.5">
               <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest leading-none">Net Deposited Capital</span>
               <span className="text-lg font-bold text-zinc-200 font-mono tracking-tight">{formatCurrency(calculations.totalDeposits)}</span>
@@ -465,149 +465,10 @@ export default function WealthCalculator() {
               <span className="block text-[9px] font-mono text-emerald-green uppercase tracking-widest leading-none">Compound AI Interest</span>
               <span className="text-lg font-bold text-emerald-green font-mono tracking-tight">+{formatCurrency(calculations.finalInterest)}</span>
             </div>
-          </div>
-        </Perspective3D>
-
-        {/* DYNAMIC HOLOGRAPHIC GLASS JAR FILLING WITH COINS */}
-        <Perspective3D maxTilt={10} scale={1.03} className="md:col-span-4 bg-gradient-to-b from-white/[0.04] to-transparent p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col justify-between overflow-hidden relative group" id="savora_jar_3d_panel">
-          {/* subtle ambient background pulse */}
-          <div className="absolute inset-x-0 -top-10 h-24 bg-gradient-to-b from-emerald-green/10 to-transparent blur-xl pointer-events-none" />
-
-          <div className="text-center space-y-1 relative z-10">
-            <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase block font-semibold">Decentralized Vault</span>
-            <h4 className="text-sm font-bold text-white tracking-wide">Interactive Savora Jar</h4>
-            <p className="text-[10px] text-zinc-400">Wealth Capacity Meter</p>
-          </div>
-
-          {/* THE SVG MASON GLASS JAR ANIMATOR */}
-          <div className="my-5 flex justify-center items-center h-44 relative">
-            <div className="absolute inset-0 bg-radial-gradient(circle_at_center,rgba(0,200,150,0.05)_0%,transparent_80%) pointer-events-none" />
-            
-            {/* Holographic Glowing SVG Glass Jar */}
-            <svg
-              viewBox="0 0 140 180"
-              width="100%"
-              height="100%"
-              className="max-w-[120px] overflow-visible drop-shadow-[0_10px_35px_rgba(0,200,150,0.15)]"
-            >
-              <defs>
-                <linearGradient id="jarGlassGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.12" />
-                  <stop offset="25%" stopColor="#FFFFFF" stopOpacity="0.04" />
-                  <stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.04" />
-                  <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.18" />
-                </linearGradient>
-                {/* Rising liquid level gradient */}
-                <linearGradient id="wealthLiquidGrad" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="0%" stopColor="#0D1E1A" stopOpacity="0.9" />
-                  <stop offset="60%" stopColor="#00C896" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#F5C15C" stopOpacity="0.7" />
-                </linearGradient>
-              </defs>
-
-              {/* Dynamic filling liquid level. Height mapped of compounding yield percentage */}
-              {/* Max is 130px, base height starts at index. */}
-              {(() => {
-                const fillingRatio = Math.min(1.0, calculations.finalAmount / 2200000); // Caps jar fill visually around 22 Lakh values.
-                const liquidHeight = Math.max(10, fillingRatio * 125); // At least 10px tall, up to 125px tall.
-                const liquidY = 160 - liquidHeight;
-
-                // Let's render the rising saving wave and floating glistening points/coins
-                return (
-                  <g>
-                    {/* The liquid wave fill bounded inside jar outline space */}
-                    <rect
-                      x="23"
-                      y={liquidY}
-                      width="94"
-                      height={liquidHeight}
-                      rx="8"
-                      fill="url(#wealthLiquidGrad)"
-                      className="transition-all duration-300 ease-out"
-                    />
-                    
-                    {/* Animated coin circles based on duration of investment */}
-                    {/* Spawns custom number of coins based on settings.monthlySavings */}
-                    {Array.from({ length: Math.min(25, Math.ceil(settings.monthlySavings / 4000)) }).map((_, idx) => {
-                      // Deterministic coordinate calculations so they don't randomly shift and flick on state updates
-                      const coordSeedX = Math.sin(idx * 735.25 + 1.5) * 0.5 + 0.5; // range [0, 1]
-                      const coordSeedY = Math.cos(idx * 412.35 + 2.8) * 0.5 + 0.5; // range [0, 1]
-
-                      const cx = 28 + coordSeedX * 84; 
-                      // Float constraints: keep coins inside liquid body
-                      const cy = (liquidY + 10) + coordSeedY * (liquidHeight - 20);
-                      const radius = 3 + (idx % 3 === 0 ? 1.5 : 0.5); // some a bit bigger than others.
-
-                      return (
-                        <circle
-                          key={idx}
-                          cx={cx}
-                          cy={cy > 156 ? 152 : cy}
-                          r={radius}
-                          fill={idx % 2 === 0 ? "#F5C15C" : "#00C896"}
-                          className="animate-pulse shadow-[0_0_8px_rgba(245,193,92,0.8)]"
-                          style={{ animationDelay: `${idx * 0.2}s`, animationDuration: `${1.5 + (idx % 2)}s` }}
-                        />
-                      );
-                    })}
-                  </g>
-                );
-              })()}
-
-              {/* Glass Mason Jar Body Silhouette */}
-              <path
-                d="M 40,20 
-                   C 36,20 32,22 32,26
-                   L 32,32
-                   C 32,34 30,36 28,38
-                   L 22,46
-                   C 20,49 20,53 20,57
-                   L 20,154
-                   C 20,166 30,172 42,172
-                   L 98,172
-                   C 110,172 120,166 120,154
-                   L 120,57
-                   C 120,53 120,49 118,46
-                   L 112,38
-                   C 110,36 108,34 108,32
-                   L 108,26
-                   C 108,22 104,20 100,20
-                   Z"
-                fill="url(#jarGlassGrad)"
-                stroke="#FFFFFF"
-                strokeWidth="1.5"
-                strokeOpacity="0.25"
-                className="pointer-events-none"
-              />
-
-              {/* Jar Neck/threads lines */}
-              <line x1="38" y1="26" x2="102" y2="26" stroke="#FFFFFF" strokeOpacity="0.25" strokeWidth="1.5" />
-              <line x1="34" y1="31" x2="106" y2="31" stroke="#FFFFFF" strokeOpacity="0.2" strokeWidth="1" />
-
-              {/* Holographic Savora Brand Seal On Jar featuring backgroundless brand logo */}
-              <image
-                href={savoraLogo}
-                x="50"
-                y="80"
-                width="40"
-                height="40"
-                className="pointer-events-none drop-shadow-[0_2px_12px_rgba(0,300,150,0.4)]"
-              />
-
-              {/* Glass light reflection flare highlight */}
-              <path
-                d="M 24,65 C 24,55 26,48 27,48 C 28,48 26,55 26,65 L 26,145 C 26,155 24,152 24,142 Z"
-                fill="#FFFFFF"
-                fillOpacity="0.25"
-              />
-            </svg>
-          </div>
-
-          {/* Expected final accumulated total indicator */}
-          <div className="space-y-1 text-center relative z-10 bg-black/45 py-2 px-3 rounded-2xl border border-white/5">
-            <span className="block text-[8px] font-mono text-zinc-500 uppercase tracking-widest">Maturing Safe Value</span>
-            <span className="text-base font-bold text-white font-mono tracking-wide">{formatCurrency(calculations.finalAmount)}</span>
-            <span className="block text-[8px] font-mono text-zinc-400 capitalize">In {settings.durationYears} target years</span>
+            <div className="space-y-0.5">
+              <span className="block text-[9px] font-mono text-gold-accent uppercase tracking-widest leading-none">Maturing Safe Value</span>
+              <span className="text-lg font-bold text-gold-accent font-mono tracking-tight">{formatCurrency(calculations.finalAmount)}</span>
+            </div>
           </div>
         </Perspective3D>
 

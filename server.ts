@@ -8,6 +8,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -16,6 +17,28 @@ const PORT = 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Server-side Supabase Database config & engagement
+const supabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+const supabaseAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+const supabase = isSupabaseConfigured 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+if (!isSupabaseConfigured) {
+  console.log("⚠️ Savora Offline Node active (Supabase connection parameters missing).");
+} else {
+  console.log("🚀 Savora Private Ledger successfully engaged via Supabase Auth & Storage.");
+}
+
+// Allowed admin whitelist parameters - Added user's active login email
+const PERMITTED_ADMINS = [
+  "ckushal120@gmail.com", 
+  "ssonvir459@gmail.com", 
+  "savorafinanceprivatelimited@gmail.com"
+];
 
 // Lazy initializer for Google Gemini SDK
 let aiClient: GoogleGenAI | null = null;

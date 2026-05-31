@@ -2,6 +2,64 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function() {
+        const isViteNoise = function(msg) {
+          if (!msg) return false;
+          const lower = String(msg).toLowerCase();
+          return lower.includes('websocket') || 
+                 lower.includes('vite') || 
+                 lower.includes('hmr') || 
+                 lower.includes('web socket');
+        };
+
+        // Suppress unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+          const reason = event.reason;
+          if (reason) {
+            const msg = typeof reason === 'string' ? reason : (reason.message || '');
+            if (isViteNoise(msg)) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          }
+        }, true);
+
+        // Suppress regular errors
+        window.addEventListener('error', function(event) {
+          const msg = event.message || '';
+          const errorObj = event.error || {};
+          const errorMsg = errorObj.message || '';
+          if (isViteNoise(msg) || isViteNoise(errorMsg)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        // Suppress console logs/errors/warns for Vite HMR noise
+        const methods = ['log', 'warn', 'error', 'debug', 'info'];
+        methods.forEach(function(m) {
+          const orig = console[m];
+          if (orig) {
+            console[m] = function() {
+              const args = Array.prototype.slice.call(arguments);
+              const hasNoise = args.some(function(arg) {
+                if (!arg) return false;
+                if (typeof arg === 'string') return isViteNoise(arg);
+                try {
+                  const s = JSON.stringify(arg);
+                  return isViteNoise(s);
+                } catch(e) {
+                  return false;
+                }
+              });
+              if (hasNoise) return;
+              orig.apply(console, arguments);
+            };
+          }
+        });
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Savora Finance Private Limited | Sovereign Digital Vaults</title>
   </head>

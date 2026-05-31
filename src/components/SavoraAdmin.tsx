@@ -30,7 +30,11 @@ import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
 
 // Permitted admin whitelist parameters
-const PERMITTED_ADMINS = ["ckushal120@gmail.com", "ssonvir459@gmail.com"];
+const PERMITTED_ADMINS = [
+  "ckushal120@gmail.com",
+  "ssonvir459@gmail.com",
+  "savorafinanceprivatelimited@gmail.com"
+];
 
 interface WaitlistRecord {
   id?: string | number;
