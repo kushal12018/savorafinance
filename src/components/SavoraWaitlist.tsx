@@ -266,7 +266,7 @@ export default function SavoraWaitlist({
                   {/* Form fields */}
                   <form onSubmit={handleSubmit} className="space-y-4 pt-2">
                     {/* Full Name Block */}
-                    <div className="space-y-1.5Col">
+                    <div className="space-y-1.5">
                       <label className="text-[8.5px] font-mono tracking-widest text-[#777] uppercase font-black block">Full Name</label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
