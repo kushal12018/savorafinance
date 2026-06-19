@@ -111,44 +111,40 @@ export default function SavoraWaitlist({
     const sanitizedName = sanitizeInput(formData.fullName);
 
     // Perform database uniqueness checks before committing waitlist insertion
-    if (isSupabaseConfigured && supabase) {
-      try {
-        // Check for duplicate emailId case-insensitively
-        const { data: duplicateEmail, error: emailErr } = await supabase
-          .from("waitlist")
-          .select("email_id")
-          .ilike("email_id", sanitizedEmail);
-
-        if (emailErr) {
-          console.error("Database email uniqueness check failed:", emailErr.message);
-        } else if (duplicateEmail && duplicateEmail.length > 0) {
-          setErrors(prev => ({
-            ...prev,
-            emailId: "This email address is already registered on our waitlist."
-          }));
-          setSubmitting(false);
-          return;
-        }
-
-        // Check for duplicate mobileNumber
-        const { data: duplicatePhone, error: phoneErr } = await supabase
-          .from("waitlist")
-          .select("mobile_number")
-          .eq("mobile_number", sanitizedPhone);
-
-        if (phoneErr) {
-          console.error("Database mobile uniqueness check failed:", phoneErr.message);
-        } else if (duplicatePhone && duplicatePhone.length > 0) {
-          setErrors(prev => ({
-            ...prev,
-            mobileNumber: "This mobile number is already registered on our waitlist."
-          }));
-          setSubmitting(false);
-          return;
-        }
-      } catch (err) {
-        console.error("Database system verification error:", err);
+    try {
+      // 1. Check duplicate email via secure backend proxy
+      const emailCheckRes = await fetch("/api/supabase/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: sanitizedEmail })
+      });
+      const emailCheckData = await emailCheckRes.json();
+      if (emailCheckData.success && emailCheckData.exists) {
+        setErrors(prev => ({
+          ...prev,
+          emailId: "This email address is already registered on our waitlist."
+        }));
+        setSubmitting(false);
+        return;
       }
+
+      // 2. Check duplicate phone via secure backend proxy
+      const phoneCheckRes = await fetch("/api/supabase/check-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: sanitizedPhone })
+      });
+      const phoneCheckData = await phoneCheckRes.json();
+      if (phoneCheckData.success && phoneCheckData.exists) {
+        setErrors(prev => ({
+          ...prev,
+          mobileNumber: "This mobile number is already registered on our waitlist."
+        }));
+        setSubmitting(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Database system verification error:", err);
     }
 
     const randomSeed = Math.floor(Math.random() * 850) + 12800; // e.g. #SAV-13482
@@ -167,26 +163,24 @@ export default function SavoraWaitlist({
       secureCode: secureCode
     };
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from("waitlist")
-          .insert([
-            {
-              full_name: sanitizedName,
-              mobile_number: sanitizedPhone,
-              email_id: sanitizedEmail,
-              queue_position: randomSeed,
-              secure_code: secureCode
-            }
-          ]);
-        
-        if (error) {
-          console.error("Supabase Save Error:", error.message);
-        }
-      } catch (err) {
-        console.error("Failed to post to Supabase node:", err);
+    try {
+      const insertRes = await fetch("/api/supabase/insert-waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: sanitizedName,
+          mobileNumber: sanitizedPhone,
+          emailId: sanitizedEmail,
+          queuePosition: randomSeed,
+          secureCode: secureCode
+        })
+      });
+      const insertData = await insertRes.json();
+      if (!insertData.success) {
+        console.error("Supabase Save Error:", insertData.error);
       }
+    } catch (err) {
+      console.error("Failed to post to Supabase node:", err);
     }
 
     localStorage.setItem("savora_waitlist_user", JSON.stringify(payload));

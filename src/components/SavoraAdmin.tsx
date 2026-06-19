@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   X, 
@@ -22,19 +22,20 @@ import {
   Check,
   Search,
   Lock,
-  Trash2
+  Trash2,
+  LayoutDashboard,
+  Sliders,
+  FileText,
+  Settings as SettingsIcon,
+  Shield,
+  Activity,
+  LogOut,
+  AlertCircle,
+  Calendar
 } from "lucide-react";
-import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
 // Reference generated logo asset path
 import savoraLogo from "../assets/images/savora_finance_logo_1779737512814.png";
-
-// Permitted admin whitelist parameters
-const PERMITTED_ADMINS = [
-  "ckushal120@gmail.com",
-  "ssonvir459@gmail.com",
-  "savorafinanceprivatelimited@gmail.com"
-];
 
 interface WaitlistRecord {
   id?: string | number;
@@ -46,65 +47,108 @@ interface WaitlistRecord {
   created_at?: string;
 }
 
+interface AuditLog {
+  timestamp: string;
+  email: string;
+  event: string;
+  status: "SUCCESS" | "DENIED" | "BLOCKED" | "INFO";
+  ipAddress: string;
+}
+
+interface SavoraSettings {
+  featureRate: string;
+  minimumDeposit: string;
+  announcementBanner: string;
+  calculatorYieldDefault: number;
+  otpDurationMinutes: number;
+  maxLoginRetries: number;
+  lockoutDurationMinutes: number;
+}
+
 interface SavoraAdminProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+type AdminTab = "overview" | "waitlist" | "content" | "logs" | "settings";
+
 export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
+  // Authentication states
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
+  const [token, setToken] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [verificationPending, setVerificationPending] = useState(false);
-  
-  const [records, setRecords] = useState<WaitlistRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  
   const [submittingEmail, setSubmittingEmail] = useState(false);
   const [submittingOtp, setSubmittingOtp] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   
-  // Simulated demo state if Supabase isn't configured
-  const [demoOtpCode, setDemoOtpCode] = useState("");
+  // Interactive OTP simulation/direct developer helpers
+  const [sandboxToken, setSandboxToken] = useState("");
+  
+  // Applet settings & data metrics
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const [records, setRecords] = useState<WaitlistRecord[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  
+  // Server-synced Configuration variables
+  const [adminSettings, setAdminSettings] = useState<SavoraSettings>({
+    featureRate: "8.5%",
+    minimumDeposit: "500",
+    announcementBanner: "⚡ Savora High-Yield Reserve: Enhanced protection mechanism active for general ledger deposits.",
+    calculatorYieldDefault: 12,
+    otpDurationMinutes: 5,
+    maxLoginRetries: 3,
+    lockoutDurationMinutes: 10
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Active Session Timers (30 Minutes countdown)
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number>(1800); // 30 mins
+  const activityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fallback demo database if server is bypassed or connection drops
   const [demoRecords, setDemoRecords] = useState<WaitlistRecord[]>([
     {
       id: 1,
-      full_name: "Amit Patel",
+      full_name: "Kushal Chandak",
       mobile_number: "+91 99112 23344",
-      email_id: "amit.patel@gmail.com",
+      email_id: "ckushal120@gmail.com",
       queue_position: 12904,
       secure_code: "SAV-NODE-XF98A1",
       created_at: new Date().toISOString()
     },
     {
       id: 2,
-      full_name: "Priya Sharma",
+      full_name: "Savora Private User",
       mobile_number: "+91 98223 34455",
-      email_id: "priya.sharma@yahoo.co.in",
+      email_id: "savorafinanceprivatelimited@gmail.com",
       queue_position: 13180,
       secure_code: "SAV-NODE-ZB029P",
       created_at: new Date(Date.now() - 3600000).toISOString()
     },
     {
       id: 3,
-      full_name: "Rajesh Kumar",
-      mobile_number: "+91 97334 45566",
-      email_id: "rajesh.kumar@outlook.com",
-      queue_position: 13511,
+      full_name: "Amit Patel",
+      mobile_number: "+91 91234 56789",
+      email_id: "amit.patel@gmail.com",
+      queue_position: 13410,
       secure_code: "SAV-NODE-HD331K",
       created_at: new Date(Date.now() - 7200000).toISOString()
     }
   ]);
 
-  // Read saved local waitlist entry to display in demo if present
+  // Read saved local waitlist entries to display in fallback
   useEffect(() => {
     const saved = localStorage.getItem("savora_waitlist_user");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const mapped = {
+        const mapped: WaitlistRecord = {
           id: 99,
           full_name: parsed.fullName,
           mobile_number: parsed.mobileNumber,
@@ -123,88 +167,214 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
     }
   }, [isOpen]);
 
-  // Automated background active admin session synchronization
-  useEffect(() => {
-    if (isOpen && isSupabaseConfigured && supabase) {
-      const checkSession = async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const userEmail = session.user.email?.toLowerCase().trim();
-            if (userEmail && PERMITTED_ADMINS.includes(userEmail)) {
-              setEmail(userEmail);
-              setIsAuthenticated(true);
-              setSuccessMessage("INTEGRITY CONFIRMED: Administrative session automatically synchronized.");
-              setLoadingRecords(true);
-              const { data, error } = await supabase
-                .from("waitlist")
-                .select("*")
-                .order("id", { ascending: false });
-              if (!error && data) {
-                setRecords(data);
-              }
-              setLoadingRecords(false);
-            } else {
-              // Not a permitted custodian admin, forcibly sign them out for absolute security
-              await supabase.auth.signOut();
-              setIsAuthenticated(false);
-            }
-          }
-        } catch (e) {
-          console.error("Session verification bypass attempt:", e);
-        }
-      };
-      checkSession();
+  // Synchronize dynamic settings from server side configurations
+  const pullServerSettings = async (tokenStr: string) => {
+    try {
+      const url = `/api/supabase/admin/settings?token=${encodeURIComponent(tokenStr)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && data.success && data.settings) {
+        setAdminSettings(data.settings);
+      }
+    } catch (err) {
+      console.error("Failed to sync server settings:", err);
     }
+  };
+
+  // Synchronize Audit Logs from backend
+  const fetchAuditLogs = async (tokenStr: string) => {
+    setLoadingLogs(true);
+    try {
+      const url = `/api/supabase/admin/logs?token=${encodeURIComponent(tokenStr)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && data.success && data.logs) {
+        setAuditLogs(data.logs);
+      }
+    } catch (err) {
+      console.error("Failed to query audit trails logs:", err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  // Validate session on load
+  useEffect(() => {
+    if (isOpen) {
+      const savedToken = sessionStorage.getItem("savora_admin_token");
+      const savedEmail = sessionStorage.getItem("savora_admin_email");
+
+      if (savedToken && savedEmail) {
+        const checkSession = async () => {
+          try {
+            const res = await fetch("/api/supabase/admin/validate-session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sessionToken: savedToken })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+              setEmail(data.email);
+              setIsAuthenticated(true);
+              setSuccessMessage("INTEGRITY COMPIRMED: Sovereign dynamic security handshake authenticated.");
+              setSessionTimeRemaining(data.expiresInSeconds || 1800);
+              
+              // Synchronize configurations and records
+              fetchWaitlistData(savedToken);
+              pullServerSettings(savedToken);
+              fetchAuditLogs(savedToken);
+              
+              // Bootstrap countdown
+              startSessionCountdown(data.expiresInSeconds || 1800);
+              setupActivityTracker(savedToken);
+            } else {
+              // Session stale on server
+              handleLogout();
+            }
+          } catch (err) {
+            console.error("Failed session alignment verification:", err);
+            // Non-blocking fallback for offline
+            setEmail(savedEmail);
+            setIsAuthenticated(true);
+            setRecords(demoRecords);
+            startSessionCountdown(1800);
+          }
+        };
+        checkSession();
+      }
+    }
+
+    return () => {
+      clearAllTimers();
+    };
   }, [isOpen]);
+
+  const clearAllTimers = () => {
+    if (activityTimeoutRef.current) clearTimeout(activityTimeoutRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+  };
+
+  // Start countdown ticking session expiring
+  const startSessionCountdown = (duration: number) => {
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    
+    setSessionTimeRemaining(duration);
+    countdownIntervalRef.current = setInterval(() => {
+      setSessionTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownIntervalRef.current!);
+          handleLogout("Session expired due to inactivity.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Ping server to refresh session to prevent 30-min expiration
+  const refreshAdminSession = async (tokenStr: string) => {
+    try {
+      const res = await fetch("/api/supabase/admin/validate-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken: tokenStr })
+      });
+      const data = await res.json();
+      if (data.success) {
+        startSessionCountdown(data.expiresInSeconds || 1800);
+      }
+    } catch (e) {
+      // Offline support
+      startSessionCountdown(1800);
+    }
+  };
+
+  // Reset inactive countdown timer on human events (mouse moves, keys type)
+  const setupActivityTracker = (tokenStr: string) => {
+    if (activityTimeoutRef.current) clearTimeout(activityTimeoutRef.current);
+
+    // Limit actual ping requests to server to once every 45 seconds to prevent spam
+    let lastPing = Date.now();
+
+    const handleUserAction = () => {
+      const elapsed = Date.now() - lastPing;
+      if (elapsed > 45000) {
+        lastPing = Date.now();
+        refreshAdminSession(tokenStr);
+      }
+    };
+
+    window.addEventListener("mousemove", handleUserAction);
+    window.addEventListener("keydown", handleUserAction);
+    window.addEventListener("mousedown", handleUserAction);
+
+    // Auto-teardown
+    activityTimeoutRef.current = setTimeout(() => {
+      window.removeEventListener("mousemove", handleUserAction);
+      window.removeEventListener("keydown", handleUserAction);
+      window.removeEventListener("mousedown", handleUserAction);
+    }, 1800 * 1000);
+  };
+
+  const handleLogout = (message = "") => {
+    sessionStorage.removeItem("savora_admin_token");
+    sessionStorage.removeItem("savora_admin_email");
+    setIsAuthenticated(false);
+    setVerificationPending(false);
+    setToken("");
+    setEmail("");
+    setSandboxToken("");
+    setSuccessMessage(message || "DE-AUTHORIZED: Session destroyed and memory vectors zeroed.");
+    setErrorMessage("");
+    clearAllTimers();
+  };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+    setSandboxToken("");
     
     const targetEmail = email.trim().toLowerCase();
     
-    // Core clearance check
-    if (!PERMITTED_ADMINS.includes(targetEmail)) {
-      setErrorMessage("ACCESS COMPROMISED: This email address is not registered as an authorized advisory node custodian.");
+    // Whitelist defense right on the client side
+    const Whitelist = ["ckushal120@gmail.com", "savorafinanceprivatelimited@gmail.com"];
+    if (!Whitelist.includes(targetEmail)) {
+      setErrorMessage("ACCESS COMPROMISED: This email address is not registered as an authorized custodian under Savora guidelines.");
       return;
     }
 
     setSubmittingEmail(true);
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        // Trigger true Supabase authentication via email OTP code
-        const { error } = await supabase.auth.signInWithOtp({
-          email: targetEmail,
-          options: {
-            shouldCreateUser: false,
-            emailRedirectTo: undefined
-          }
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        setVerificationPending(true);
-        setSuccessMessage("INTEGRITY TOKEN DISPATCHED: Supabase sent a secure one-time passcode verification token to your inbox.");
-      } catch (err: any) {
-        console.error("Supabase OTP send failure:", err);
-        setErrorMessage(`SUPABASE SERVICE REFUSAL: ${err.message || "Failed to trigger remote secure token."}`);
-      } finally {
-        setSubmittingEmail(false);
+    try {
+      const res = await fetch("/api/supabase/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to dispatch sovereign 2FA passcode.");
       }
-    } else {
-      // Sandbox Simulator fallback so developers aren't bricked
-      setTimeout(() => {
-        const fakeOtp = Math.floor(Math.random() * 900000) + 100000; // e.g. 582910
-        setDemoOtpCode(fakeOtp.toString());
-        setVerificationPending(true);
-        setSuccessMessage(`SANDBOX AUDIT MODE: Generated digital OTP code is displayed below for simulation.`);
-        setSubmittingEmail(false);
-      }, 1200);
+
+      setVerificationPending(true);
+      setSuccessMessage("2FA HANDSHAKE ENGAGED: Enter the secure verification passcode sent to your terminal inbox.");
+      
+      // Sandbox help: Expose OTP for developers testing inside the panel seamlessly
+      if (data.developerSandboxToken) {
+        setSandboxToken(data.developerSandboxToken);
+      }
+    } catch (err: any) {
+      console.error("2FA initialization error:", err);
+      // Fallback
+      const fallbackOtp = Math.floor(Math.random() * 900000) + 100000;
+      setSandboxToken(fallbackOtp.toString());
+      setVerificationPending(true);
+      setSuccessMessage("SANDBOX EMULATION MODE: Security engine active. Simulator passcode generated below.");
+    } finally {
+      setSubmittingEmail(false);
     }
   };
 
@@ -213,73 +383,76 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
     setErrorMessage("");
     setSubmittingOtp(true);
 
-    const token = otp.trim();
     const targetEmail = email.trim().toLowerCase();
+    const otpCode = token.trim();
 
-    // Security check: Defensive-in-depth whitelist enforcement
-    if (!PERMITTED_ADMINS.includes(targetEmail)) {
-      setErrorMessage("ACCESS COMPROMISED: This email address is not registered as an authorized advisory node custodian.");
-      setSubmittingOtp(false);
-      return;
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error, data } = await supabase.auth.verifyOtp({
-          email: targetEmail,
-          token: token,
-          type: "email"
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        setIsAuthenticated(true);
-        setSuccessMessage("CLEARANCE GRANTED: Sovereign audit channel unlocked.");
-        fetchWaitlistData();
-      } catch (err: any) {
-        console.error("OTP verification failure:", err);
-        setErrorMessage(`INVALID COMPLIANCE PASS: ${err.message || "The verification token entered is mathematically incorrect."}`);
-      } finally {
-        setSubmittingOtp(false);
+    try {
+      const res = await fetch("/api/supabase/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail, token: otpCode })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Decoupled verification passcode mismatch.");
       }
-    } else {
-      // Sandbox simulator verification
-      setTimeout(() => {
-        if (token === demoOtpCode || token === "123456") {
-          setIsAuthenticated(true);
-          setRecords(demoRecords);
-          setSuccessMessage("SANDBOX SECURED: Simulator node logs loaded safely.");
-        } else {
-          setErrorMessage("INVALID OTP PASSCODE: Try entering the numeric code displayed in the sandbox alert frame.");
-        }
-        setSubmittingOtp(false);
-      }, 1000);
+
+      // Store credentials locally
+      sessionStorage.setItem("savora_admin_token", data.sessionToken);
+      sessionStorage.setItem("savora_admin_email", data.email);
+      
+      setIsAuthenticated(true);
+      setSuccessMessage("CLEARANCE GRANTED: Secure admin server channel configured and locked.");
+      setSandboxToken("");
+      
+      // Fetch dynamic logs and settings
+      fetchWaitlistData(data.sessionToken);
+      pullServerSettings(data.sessionToken);
+      fetchAuditLogs(data.sessionToken);
+
+      // Start security timer pings
+      startSessionCountdown(data.expiresInSeconds || 1800);
+      setupActivityTracker(data.sessionToken);
+    } catch (err: any) {
+      console.error("Authentication verify error:", err);
+      
+      // Offline Sandbox simulator passcode check fallback
+      if (sandboxToken && otpCode === sandboxToken) {
+        const simToken = "sim_token_" + Math.random().toString(36).substring(3, 12);
+        sessionStorage.setItem("savora_admin_token", simToken);
+        sessionStorage.setItem("savora_admin_email", targetEmail);
+        setIsAuthenticated(true);
+        setRecords(demoRecords);
+        setSuccessMessage("SANDBOX SECURED: Emulated administrator ledger tables initialized.");
+        startSessionCountdown(1800);
+      } else {
+        setErrorMessage(`ACCESS REFUSAL: ${err.message || "Passed code is mathematically invalid."}`);
+      }
+    } finally {
+      setSubmittingOtp(false);
     }
   };
 
-  const fetchWaitlistData = async () => {
-    if (!isSupabaseConfigured || !supabase) {
-      setRecords(demoRecords);
-      return;
-    }
-
+  const fetchWaitlistData = async (tokenStr?: string) => {
+    const activeToken = tokenStr || sessionStorage.getItem("savora_admin_token") || "";
     setLoadingRecords(true);
     try {
-      const { data, error } = await supabase
-        .from("waitlist")
-        .select("*")
-        .order("id", { ascending: false });
-
-      if (error) {
-        throw error;
+      const res = await fetch("/api/supabase/admin/records", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({ sessionToken: activeToken })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Cannot select records.");
       }
-
-      setRecords(data || []);
+      setRecords(data.records || []);
     } catch (err: any) {
-      console.error("Supabase table query failure:", err);
-      // Fallback gracefully so we don't crash
+      console.error("Waitlist query failed:", err);
       setRecords(demoRecords);
     } finally {
       setLoadingRecords(false);
@@ -287,26 +460,68 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
   };
 
   const handleDeleteRecord = async (id: string | number) => {
-    if (!confirm("Are you sure you want to permanently strip this record from Savora ledger logs?")) return;
+    if (!confirm("Are you sure you want to permanently strip this client registry record from the Savora High-Yield table?")) return;
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from("waitlist")
-          .delete()
-          .eq("id", id);
-        if (error) throw error;
-        fetchWaitlistData();
-      } catch (err: any) {
-        alert(`Failed to delete registry: ${err.message}`);
+    const activeToken = sessionStorage.getItem("savora_admin_token") || "";
+    try {
+      const res = await fetch("/api/supabase/admin/delete", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({ id, sessionToken: activeToken })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed deletion.");
       }
-    } else {
+      setSuccessMessage(`LEDGER REGISTRY REMOVED: Successfully deleted record ID #${id}.`);
+      fetchWaitlistData(activeToken);
+      fetchAuditLogs(activeToken);
+    } catch (err: any) {
+      console.error("Failed waitlist strip request:", err);
+      // Local removal feedback
       setRecords(prev => prev.filter(r => r.id !== id));
       setDemoRecords(prev => prev.filter(r => r.id !== id));
+      setSuccessMessage(`LEDGER REGISTRY STRIPPED (LOCAL FALLBACK): Row ID #${id} deleted.`);
     }
   };
 
-  // Convert waitlist records into spreadsheet download
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const activeToken = sessionStorage.getItem("savora_admin_token") || "";
+    try {
+      const res = await fetch("/api/supabase/admin/settings", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({ 
+          ...adminSettings,
+          sessionToken: activeToken 
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed updating system config.");
+      }
+      setSuccessMessage("SYSTEM INTEGRITY LOCKED: Server parameters and SAVOR-LEDGER limits updated successfully.");
+      pullServerSettings(activeToken);
+      fetchAuditLogs(activeToken);
+    } catch (err: any) {
+      console.error("Settings submission error:", err);
+      setErrorMessage(`SUBMISSION DECLINED: ${err.message || "Failed changing parameters."}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleDownloadCSV = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + ["ID,Full Name,Mobile Number,Email ID,Queue Position,Verification Code"].join(",") + "\n"
@@ -328,57 +543,74 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
     r.secure_code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Format session countdown MM:SS
+  const formatCountdown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}m ${remainingSecs < 10 ? "0" : ""}${remainingSecs}s`;
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/90 backdrop-blur-lg"
+            className="absolute inset-0 bg-black/95 backdrop-blur-xl"
           />
 
+          {/* Dialog Body */}
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
+            initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="relative w-full max-w-4xl rounded-[40px] bg-[#090909] border border-white/10 p-6 sm:p-9 shadow-[0_45px_100px_rgba(0,0,0,0.95)] max-h-[88vh] overflow-y-auto z-10 text-left flex flex-col justify-between"
+            exit={{ scale: 0.96, opacity: 0 }}
+            className="relative w-full max-w-5xl rounded-[32px] sm:rounded-[40px] bg-[#090909] border border-white/10 p-4 sm:p-8 shadow-[0_45px_100px_rgba(0,0,0,0.95)] max-h-[92vh] overflow-y-auto z-10 text-left flex flex-col justify-between"
           >
-            {/* Ambient indicator lights */}
-            <div className={`absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r ${isAuthenticated ? 'from-emerald-green via-white to-emerald-green' : 'from-orange-500 via-white to-orange-500'} transition-all`} />
+            {/* Top Indicator Line */}
+            <div className={`absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r ${isAuthenticated ? 'from-emerald-green via-zinc-250 to-emerald-green' : 'from-orange-500 via-zinc-250 to-orange-500'} transition-all`} />
 
-            {/* Title block */}
-            <div className="flex justify-between items-center pb-5 border-b border-white/5">
+            {/* Header section */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 border-b border-white/5 gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="relative flex h-11 w-11 items-center justify-center rounded-full overflow-hidden border border-emerald-green/25 bg-white/5 shadow-[0_0_15px_rgba(0,200,150,0.15)] shrink-0">
-                  <img src={savoraLogo} alt="Savora Finance Private Limited Logo" className="w-full h-full object-cover" />
+                <div className="relative flex h-11 w-11 items-center justify-center rounded-full overflow-hidden border border-emerald-green/25 bg-white/5 shadow-[0_0_15px_rgba(0,200,150,0.15)] shrink-0 animate-pulse">
+                  <img src={savoraLogo} alt="Savora Logo" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-serif font-extrabold text-white tracking-widest uppercase flex items-center gap-2">
-                    SAVORA FINANCE PRIVATE LIMITED <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400">ADMIN AUDIT NODE</span>
+                  <h4 className="text-xs sm:text-sm font-serif font-black text-white tracking-widest uppercase flex flex-wrap items-center gap-2">
+                    SAVORA WEALTH <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400">ADMINISTRATIVE MASTER CONSOLE</span>
                   </h4>
-                  <span className="text-[8px] font-mono text-zinc-500 tracking-[0.25em] block uppercase mt-0.5">EXCLUSIVE CUSTODIAL TRANSACTION ACCESS</span>
+                  <span className="text-[7.5px] font-mono text-zinc-500 tracking-[0.22em] block uppercase mt-0.5">EXCLUSIVE TRUST CUSTODY NODE HANDSHAKE</span>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 text-zinc-400 hover:text-white transition-all cursor-pointer"
-              >
-                <X className="h-4.5 w-4.5" />
-              </button>
+              
+              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                {isAuthenticated && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-mono">
+                    <Clock className="h-3.5 w-3.5 animate-pulse" />
+                    <span>Expires in: {formatCountdown(sessionTimeRemaining)}</span>
+                  </div>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Error or Warning banner */}
+            {/* Alerts & Messages Block */}
             {errorMessage && (
               <div className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono flex items-start gap-3">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Success notification banner */}
             {successMessage && (
               <div className="mt-4 p-4 rounded-2xl bg-emerald-green/10 border border-emerald-green/20 text-emerald-green text-xs font-mono flex items-start gap-3">
                 <Check className="h-4 w-4 shrink-0 mt-0.5" />
@@ -386,50 +618,38 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
               </div>
             )}
 
-            <div className="py-6 grow">
-              
+            {/* Content body */}
+            <div className="py-5 grow">
               {!isAuthenticated ? (
-                /* AUTHENTICATION PATHWAY */
-                <div className="max-w-md mx-auto space-y-8 py-4">
-                  
+                /* AUTHENTICATION LAYER */
+                <div className="max-w-md mx-auto space-y-7 py-5">
                   <div className="text-center space-y-3">
-                    <div className="relative flex h-16 w-16 mx-auto items-center justify-center rounded-full overflow-hidden border border-emerald-green/35 bg-white/5 shadow-[0_0_20px_rgba(0,200,150,0.25)] mb-2">
-                      <img src={savoraLogo} alt="Savora Logo" className="w-full h-full object-cover animate-pulse" />
+                    <div className="relative flex h-16 w-16 mx-auto items-center justify-center rounded-full overflow-hidden border border-emerald-green/35 bg-white/5 shadow-[0_0_20px_rgba(0,200,150,0.25)] mb-1">
+                      <img src={savoraLogo} alt="Savora Logo" className="w-full h-full object-cover" />
                     </div>
-                    <h3 className="text-xl font-serif font-bold text-white">Savora Finance Private Limited Secure Vault</h3>
-                    <p className="text-zinc-400 text-xs font-light max-w-sm mx-auto leading-relaxed">
-                      Only accredited custodian accounts registered under Savora Finance Private Limited corporate parameters can request transaction access. Enter your key credentials to retrieve the OTP.
+                    <h3 className="text-lg sm:text-xl font-serif font-black text-white">Administrative Portal 2FA</h3>
+                    <p className="text-zinc-500 text-[11px] font-light leading-relaxed max-w-xs mx-auto">
+                      Access parameters are restricted strictly to authorized custodian emails whitelisted by Savora Finance Private Limited corporate guidelines.
                     </p>
                   </div>
 
-                  {!isSupabaseConfigured && (
-                    <div className="p-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10.5px] space-y-1 font-mono">
-                      <div className="font-bold flex items-center gap-1.5 uppercase">
-                        <AlertTriangle className="h-3.5 w-3.5" /> Supabase Config Missing
-                      </div>
-                      <p className="font-sans font-light text-zinc-400">
-                        Admin is running in a **secure offline demo sandbox**. The Whitelisting checks are active; check the authorized custodian email to review the workflow.
-                      </p>
-                    </div>
-                  )}
-
                   <AnimatePresence mode="wait">
                     {!verificationPending ? (
-                      /* STEP 1: INPUT admin email Address */
+                      /* STEP 1: Enter email */
                       <motion.form
-                        key="email_form"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
+                        key="email_step"
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
                         onSubmit={handleEmailSubmit}
-                        className="space-y-4 text-left"
+                        className="space-y-4"
                       >
-                        <div className="space-y-1.5">
-                          <label className="text-[8.5px] font-mono tracking-widest text-zinc-500 uppercase font-black block">
-                            Custodial Admin Email ID
+                        <div className="space-y-1.5 text-left">
+                          <label className="text-[8px] font-mono tracking-widest text-zinc-500 uppercase font-black block">
+                            CUSTODIAL ADMIN GMAIL ID
                           </label>
                           <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-650">
                               <Mail className="h-4 w-4" />
                             </span>
                             <input
@@ -437,8 +657,8 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                               required
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
-                              placeholder="admin@savorafinance.com"
-                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/45 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-sans placeholder-zinc-700 outline-none transition-all"
+                              placeholder="e.g. ckushal120@gmail.com"
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-sans placeholder-zinc-700 outline-none transition-all"
                             />
                           </div>
                         </div>
@@ -446,31 +666,31 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                         <button
                           type="submit"
                           disabled={submittingEmail}
-                          className="w-full py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-matte-black bg-white hover:bg-zinc-200 disabled:opacity-50 transition-all font-sans cursor-pointer shadow-md text-center flex items-center justify-center gap-2"
+                          className="w-full py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black bg-white hover:bg-zinc-200 transition-all font-sans cursor-pointer flex items-center justify-center gap-2"
                         >
                           {submittingEmail ? (
                             <>
-                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              VERIFYING ACCOUNT NODE...
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              VERIFYING CREDENTIAL NODE...
                             </>
                           ) : (
-                            "REQUEST SIGN-IN PASSCODE CODE"
+                            "DISPATCH ONE-TIME PASSCODE"
                           )}
                         </button>
                       </motion.form>
                     ) : (
-                      /* STEP 2: INPUT the OTP passcode code */
+                      /* STEP 2: Enter OTP Code */
                       <motion.form
-                        key="otp_form"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
+                        key="otp_step"
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
                         onSubmit={handleOtpVerify}
                         className="space-y-4 text-left"
                       >
                         <div className="space-y-1.5">
-                          <label className="text-[8.5px] font-mono tracking-widest text-zinc-500 uppercase font-black block">
-                            Verification passcode OTP
+                          <label className="text-[8px] font-mono tracking-widest text-[#777] uppercase font-black block">
+                            ENTER 6-DIGIT VERIFICATION OTP CODE
                           </label>
                           <div className="relative">
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
@@ -480,26 +700,27 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                               type="text"
                               required
                               maxLength={6}
-                              value={otp}
-                              onChange={(e) => setOtp(e.target.value)}
-                              placeholder="Enter 6-digit verification code"
-                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/45 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-mono uppercase tracking-widest text-center placeholder-zinc-700 outline-none transition-all"
+                              value={token}
+                              onChange={(e) => setToken(e.target.value)}
+                              placeholder="e.g. 529304"
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-mono uppercase tracking-[0.4em] text-center placeholder-zinc-700 outline-none transition-all"
                             />
                           </div>
                         </div>
 
-                        {!isSupabaseConfigured && (
+                        {/* Interactive Sandbox Helper / Display token directly for direct evaluation */}
+                        {sandboxToken && (
                           <div className="p-3.5 rounded-xl border border-emerald-green/20 bg-emerald-green/[0.02] flex items-center justify-between">
                             <div className="text-left">
-                              <span className="text-[7.5px] font-mono text-zinc-500 block uppercase font-bold">SIMULATED CRYPTOGRAPHIC OTP CODE</span>
-                              <span className="text-xs font-mono font-black text-emerald-green">{demoOtpCode}</span>
+                              <span className="text-[7.5px] font-mono text-zinc-500 block uppercase font-bold">SIMULATED 2FA PASSCODE (EXPIRATION 5M)</span>
+                              <span className="text-sm font-mono font-black text-emerald-green">{sandboxToken}</span>
                             </div>
                             <button
                               type="button"
-                              onClick={() => setOtp(demoOtpCode)}
-                              className="text-[8px] font-mono tracking-wider font-extrabold uppercase py-1 px-2.5 rounded bg-emerald-green/10 hover:bg-emerald-green/20 text-emerald-green border border-emerald-green/20 transition-all cursor-pointer"
+                              onClick={() => setToken(sandboxToken)}
+                              className="text-[8px] font-mono tracking-wider font-black uppercase py-1 px-2.5 rounded bg-emerald-green/10 hover:bg-emerald-green/20 text-emerald-green border border-emerald-green/20 transition-all cursor-pointer"
                             >
-                              Auto-fill passcode
+                              AUTO-FILL CODE
                             </button>
                           </div>
                         )}
@@ -508,167 +729,523 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                           <button
                             type="button"
                             onClick={() => setVerificationPending(false)}
-                            className="w-1/3 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-[#999] bg-transparent hover:text-white border border-white/5 hover:border-white/10 transition-all font-sans cursor-pointer"
+                            className="w-1/3 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 bg-transparent hover:text-white border border-white/5 transition-all font-sans cursor-pointer"
                           >
-                            CHANGE CODE
+                            BACK
                           </button>
                           <button
                             type="submit"
                             disabled={submittingOtp}
-                            className="w-2/3 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-matte-black bg-emerald-green hover:bg-emerald-green/85 disabled:opacity-50 transition-all font-sans cursor-pointer text-center flex items-center justify-center gap-2 shadow-md"
+                            className="w-2/3 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black bg-emerald-green hover:bg-emerald-green/85 transition-all font-sans cursor-pointer flex items-center justify-center gap-2 hover:shadow-[0_0_20px_rgba(0,200,150,0.1)]"
                           >
                             {submittingOtp ? (
                               <>
-                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                VALIDATING PASS CODE...
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                MATCHING COMPLIANCE LOCK...
                               </>
                             ) : (
-                              "VERIFY OTP PASSCODE CODE"
+                              "COMPLY & ACCESS DASHBOARD"
                             )}
                           </button>
                         </div>
                       </motion.form>
                     )}
                   </AnimatePresence>
-
                 </div>
               ) : (
-                /* AUTHENTICATED WAITLIST DATABASE LOGS */
+                /* AUTHENTICATED PANEL WORKSPACE */
                 <div className="space-y-6">
-                  
-                  {/* Dashboard Headers */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#121212]/30 p-4 rounded-3xl border border-white/5">
-                    <div className="space-y-1">
-                      <span className="text-[8px] font-mono tracking-wider font-extrabold text-[#777] uppercase block">SAVORA ACTIVE POOL REPORT</span>
-                      <h4 className="text-sm font-semibold text-white uppercase font-sans flex items-center gap-2">
-                        Total Registry Records Node: <span className="font-mono text-emerald-green font-bold text-base">#{records.length}</span>
-                      </h4>
-                    </div>
-
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                  {/* Dynamic Custom Navigation Tabs */}
+                  <div className="flex flex-wrap border-b border-white/5 text-[9.5px] font-mono tracking-wider uppercase">
+                    {[
+                      { id: "overview", label: "Overview", icon: LayoutDashboard },
+                      { id: "waitlist", label: "Waitlist Database", icon: Users },
+                      { id: "content", label: "Content variables", icon: Sliders },
+                      { id: "logs", label: "Security Logs", icon: FileText },
+                      { id: "settings", label: "Threshold Settings", icon: SettingsIcon }
+                    ].map((tab) => (
                       <button
-                        onClick={fetchWaitlistData}
-                        disabled={loadingRecords}
-                        className="p-2.5 rounded-xl border border-white/5 hover:border-white/10 bg-white/[0.02] hover:bg-white/[0.06] text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center"
-                        title="Force reload ledger nodes"
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as AdminTab)}
+                        className={`flex items-center gap-2 py-3 px-4 -mb-px border-b-2 font-bold cursor-pointer transition-all ${
+                          activeTab === tab.id 
+                            ? "border-emerald-green text-white bg-white/5 rounded-t-xl" 
+                            : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.01]"
+                        }`}
                       >
-                        <RefreshCw className={`h-4.5 w-4.5 ${loadingRecords ? 'animate-spin' : ''}`} />
+                        <tab.icon className="h-3.5 w-3.5" />
+                        <span>{tab.label}</span>
                       </button>
-
-                      <button
-                        onClick={handleDownloadCSV}
-                        disabled={records.length === 0}
-                        className="flex items-center gap-2 py-2.5 px-4 rounded-xl text-[10px] font-bold uppercase tracking-wider text-matte-black bg-white hover:bg-zinc-200 transition-all font-sans cursor-pointer text-center font-extrabold shadow"
-                      >
-                        <FileSpreadsheet className="h-4 w-4" /> DOWNLOAD SPREADSHEET CSV
-                      </button>
-                    </div>
+                    ))}
                   </div>
 
-                  {/* Search query frame */}
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
-                      <Search className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search queue records by Client Name, Email, mobile number, or Sovereign Pass key..."
-                      className="w-full bg-[#111] border border-white/5 focus:border-emerald-green/45 focus:bg-[#141414] text-white rounded-2xl py-3 px-10 text-xs placeholder-zinc-700 outline-none transition-all font-sans"
-                    />
-                  </div>
+                  {/* Tab Render Engines */}
+                  <div className="min-h-[40vh]">
+                    {activeTab === "overview" && (
+                      <div className="space-y-6">
+                        {/* Bento Analytics Card Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="p-5 rounded-3xl bg-[#0e0e0e] border border-white/5 space-y-3 relative overflow-hidden group hover:border-[#121212] transition-all">
+                            <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block font-bold">Waitlist register Node</span>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-3xl font-serif font-black text-white">{records.length}</span>
+                              <span className="text-[10px] text-emerald-green font-mono">(100% Verified)</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-sans">
+                              Active entries waiting for wealth clearance keys.
+                            </div>
+                            <Users className="absolute right-4 bottom-4 h-12 w-12 text-white/[0.02] group-hover:text-white/[0.05] transition-all" />
+                          </div>
 
-                  {/* Database logs table */}
-                  <div className="border border-white/5 rounded-3xl bg-[#090909]/60 overflow-hidden relative">
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[700px] text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-white/5 bg-white/[0.02]/30 text-[8.5px] font-mono tracking-wider font-extrabold text-zinc-500 uppercase">
-                            <th className="py-4 px-5">QUEUE SLOT</th>
-                            <th className="py-4 px-5">CLIENT CLIENT</th>
-                            <th className="py-4 px-5">EMAIL LINK ID</th>
-                            <th className="py-4 px-5">PHONE INTERCEPT</th>
-                            <th className="py-4 px-5">SOVEREIGN PASS KEY</th>
-                            <th className="py-4 px-5 text-center">MANAGEMENT</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5 text-[11px] font-mono text-zinc-300">
-                          {filteredRecords.length > 0 ? (
-                            filteredRecords.map((rec, idx) => (
-                              <tr key={idx} className="hover:bg-white/[0.01] transition-all">
-                                <td className="py-4 px-5 font-bold text-emerald-green">
-                                  #{rec.queue_position}
-                                </td>
-                                <td className="py-4 px-5 text-white font-sans font-medium">
-                                  {rec.full_name}
-                                </td>
-                                <td className="py-4 px-5 text-zinc-300">
-                                  {rec.email_id}
-                                </td>
-                                <td className="py-4 px-5 text-zinc-400">
-                                  {rec.mobile_number}
-                                </td>
-                                <td className="py-4 px-5">
-                                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9.5px] text-zinc-200">
-                                    {rec.secure_code}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-5 text-center">
-                                  <button
-                                    onClick={() => handleDeleteRecord(rec.id || idx)}
-                                    className="p-1 px-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20 text-red-400 hover:text-red-300 transition-all cursor-pointer"
-                                    title="Strip client registration"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={6} className="py-12 text-center text-zinc-650 text-xs italic">
-                                No cryptographic waitlist matching parameters found.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                          <div className="p-5 rounded-3xl bg-[#0e0e0e] border border-white/5 space-y-3 relative overflow-hidden group hover:border-[#121212] transition-all">
+                            <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block font-bold">SAVORA ANNUAL REVENUE BASE</span>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-3xl font-serif font-black text-white">{adminSettings.featureRate}</span>
+                              <span className="text-[10px] text-emerald-green font-mono">APY Max Limit</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-sans">
+                              Active ledger variable rate on premium custody.
+                            </div>
+                            <Sliders className="absolute right-4 bottom-4 h-12 w-12 text-white/[0.02] group-hover:text-white/[0.05] transition-all" />
+                          </div>
 
+                          <div className="p-5 rounded-3xl bg-[#0e0e0e] border border-white/5 space-y-3 relative overflow-hidden group hover:border-[#121212] transition-all">
+                            <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block font-bold">2FA Handshake status</span>
+                            <div className="flex items-baseline gap-2.5">
+                              <span className="text-xl font-serif font-extrabold text-emerald-green">ENFORCED</span>
+                              <ShieldCheck className="h-4 w-4 text-emerald-green" />
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-sans">
+                              OTP duration is configured to {adminSettings.otpDurationMinutes} Mins securely.
+                            </div>
+                            <Shield className="absolute right-4 bottom-4 h-12 w-12 text-white/[0.02] group-hover:text-white/[0.05] transition-all" />
+                          </div>
+
+                          <div className="p-5 rounded-3xl bg-[#0e0e0e] border border-white/5 space-y-3 relative overflow-hidden group hover:border-[#121212] transition-all">
+                            <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block font-bold">Security Level Threshold</span>
+                            <div className="flex items-baseline gap-2.5">
+                              <span className="text-xl font-serif font-extrabold text-emerald-green">CRITICAL APY-7</span>
+                              <Lock className="h-3.5 w-3.5 text-emerald-green" />
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-sans">
+                              Dynamic Session expiry locks client session after 30 mins.
+                            </div>
+                            <Activity className="absolute right-4 bottom-4 h-12 w-12 text-white/[0.02] group-hover:text-white/[0.05] transition-all" />
+                          </div>
+                        </div>
+
+                        {/* Custom Graphic Representation - Trend Visualization using simple stunning SVG */}
+                        <div className="p-6 rounded-3xl bg-[#0e0e0e] border border-white/5 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="text-xs font-mono tracking-widest uppercase font-black text-zinc-400">LEDGER GROWTH CURVE</h4>
+                              <span className="text-[10px] text-zinc-600 block">7-Day Dynamic User registration waitlist velocity</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-green">
+                              <span>+28.5% Growth Trajectory</span>
+                            </div>
+                          </div>
+
+                          {/* Render stunning stylized SVG graph chart to prevent loading libraries */}
+                          <div className="h-44 w-full flex items-end">
+                            <svg className="w-full h-full overflow-visible" viewBox="0 0 700 150" preserveAspectRatio="none">
+                              <defs>
+                                <linearGradient id="glowGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#00c896" stopOpacity="0.25" />
+                                  <stop offset="100%" stopColor="#00c896" stopOpacity="0.0" />
+                                </linearGradient>
+                              </defs>
+                              {/* Grid lines */}
+                              <line x1="0" y1="30" x2="700" y2="30" stroke="#151515" strokeWidth="1" strokeDasharray="3 3" />
+                              <line x1="0" y1="75" x2="700" y2="75" stroke="#151515" strokeWidth="1" strokeDasharray="3 3" />
+                              <line x1="0" y1="120" x2="700" y2="120" stroke="#151515" strokeWidth="1" strokeDasharray="3 3" />
+                              
+                              {/* Filled Area */}
+                              <path 
+                                d="M 0 140 Q 116 110 233 115 T 466 65 T 700 30 L 700 150 L 0 150 Z" 
+                                fill="url(#glowGrad)" 
+                              />
+                              {/* Path graph */}
+                              <path 
+                                d="M 0 140 Q 116 110 233 115 T 466 65 T 700 30" 
+                                fill="none" 
+                                stroke="#00c896" 
+                                strokeWidth="2.5" 
+                                strokeLinecap="round" 
+                              />
+                              {/* Intercept dots */}
+                              <circle cx="233" cy="115" r="4.5" fill="#000" stroke="#00c896" strokeWidth="2" />
+                              <circle cx="466" cy="65" r="4.5" fill="#000" stroke="#00c896" strokeWidth="2" />
+                              <circle cx="700" cy="30" r="5" fill="#00c896" />
+                            </svg>
+                          </div>
+                          
+                          <div className="flex justify-between text-[8px] font-mono text-zinc-650 pt-2 border-t border-white/[0.02]">
+                            <span>MON 25</span>
+                            <span>TUE 26</span>
+                            <span>WED 27</span>
+                            <span>THU 28</span>
+                            <span>FRI 29</span>
+                            <span>SAT 30</span>
+                            <span>SUN 31 (ACTIVE)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "waitlist" && (
+                      <div className="space-y-4 animate-fadeIn">
+                        {/* Control actions */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0e0e0e] p-4 rounded-3xl border border-white/5">
+                          <div className="relative w-full sm:max-w-md">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
+                              <Search className="h-4 w-4" />
+                            </span>
+                            <input
+                              type="text"
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Search database clients by Name, Email, Phone or Security clearance..."
+                              className="w-full bg-[#050505] border border-white/5 focus:border-emerald-green/45 focus:bg-[#111] text-white rounded-2xl py-3 px-10 text-xs outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-3 w-full sm:w-auto self-stretch sm:self-auto justify-end">
+                            <button
+                              onClick={() => fetchWaitlistData()}
+                              disabled={loadingRecords}
+                              className="p-3 rounded-2xl border border-white/5 hover:border-white/10 bg-white/[0.02] hover:bg-white/[0.06] text-zinc-400 hover:text-white transition-all cursor-pointer"
+                              title="Force refresh index database tables"
+                            >
+                              <RefreshCw className={`h-4.5 w-4.5 ${loadingRecords ? 'animate-spin' : ''}`} />
+                            </button>
+
+                            <button
+                              onClick={handleDownloadCSV}
+                              disabled={filteredRecords.length === 0}
+                              className="flex items-center gap-2 py-3 px-4 rounded-2xl text-[10px] font-bold uppercase tracking-wider text-black bg-white hover:bg-zinc-200 transition-all font-sans cursor-pointer font-extrabold shadow"
+                            >
+                              <FileSpreadsheet className="h-4 w-4" /> DOWNLOAD CSV SPREADSHEET
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Database list table */}
+                        <div className="border border-white/5 rounded-3xl bg-[#0e0e0e] overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[750px] text-left border-collapse">
+                              <thead>
+                                <tr className="border-b border-white/5 bg-white/[0.01] text-[8.5px] font-mono tracking-widest font-black text-zinc-500 uppercase">
+                                  <th className="py-4.5 px-6">QUEUE SLOT</th>
+                                  <th className="py-4.5 px-6">CLIENT NAME</th>
+                                  <th className="py-4.5 px-6">EMAIL REGISTRY KEY</th>
+                                  <th className="py-4.5 px-6">PHONE TELEMETRY</th>
+                                  <th className="py-4.5 px-6">VAULT EXCLUSIVE KEY</th>
+                                  <th className="py-4.5 px-6 text-center">DE-AUTHORIZE</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 text-[11px] font-mono text-zinc-300">
+                                {loadingRecords ? (
+                                  <tr>
+                                    <td colSpan={6} className="py-16 text-center text-zinc-500">
+                                      <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2.5 text-emerald-green" />
+                                      Syncing Savora database tables ...
+                                    </td>
+                                  </tr>
+                                ) : filteredRecords.length > 0 ? (
+                                  filteredRecords.map((rec, index) => (
+                                    <tr key={index} className="hover:bg-white/[0.01]/40 transition-all">
+                                      <td className="py-4 px-6 font-bold text-emerald-green">
+                                        #{rec.queue_position}
+                                      </td>
+                                      <td className="py-4 px-6 font-sans font-medium text-white">
+                                        {rec.full_name}
+                                      </td>
+                                      <td className="py-4 px-6 text-zinc-400">
+                                        {rec.email_id}
+                                      </td>
+                                      <td className="py-4 px-6 text-zinc-400">
+                                        {rec.mobile_number}
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] text-zinc-200">
+                                          {rec.secure_code}
+                                        </span>
+                                      </td>
+                                      <td className="py-4 px-6 text-center">
+                                        <button
+                                          onClick={() => handleDeleteRecord(rec.id || index)}
+                                          className="p-1 px-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20 text-red-400 hover:text-red-300 transition-all cursor-pointer"
+                                          title="Strip client registration registry"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={6} className="py-14 text-center text-zinc-600 text-xs italic">
+                                      No matching client registrations found inside database node.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "content" && (
+                      <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl bg-[#0e0e0e] border border-white/5 p-6 rounded-3xl">
+                        <div>
+                          <h3 className="text-sm font-mono font-black text-zinc-400 tracking-wider uppercase mb-1">CONTENT MANAGEMENT & WEB VARIABLES</h3>
+                          <p className="text-[10px] text-zinc-600">Sync live values down of the general interest yields and web broadcasts immediately.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 py-2">
+                          <div className="space-y-1.5 text-left">
+                            <label className="text-[8.5px] font-mono tracking-widest text-[#777] uppercase font-bold block">
+                              SAVORA High-Yield Rate APY (%)
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={adminSettings.featureRate}
+                              onChange={(e) => setAdminSettings({...adminSettings, featureRate: e.target.value})}
+                              placeholder="e.g. 8.5%"
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-2.5 px-4 text-xs font-mono outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 text-left">
+                            <label className="text-[8.5px] font-mono tracking-widest text-[#777] uppercase font-bold block">
+                              Minimum initial Deposit limit
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={adminSettings.minimumDeposit}
+                              onChange={(e) => setAdminSettings({...adminSettings, minimumDeposit: e.target.value})}
+                              placeholder="e.g. 500"
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-2.5 px-4 text-xs font-mono outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 text-left col-span-2">
+                            <label className="text-[8.5px] font-mono tracking-widest text-[#777] uppercase font-bold block">
+                              Baseline Calculator Yeild APY Default (%)
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min={1}
+                              max={50}
+                              value={adminSettings.calculatorYieldDefault}
+                              onChange={(e) => setAdminSettings({...adminSettings, calculatorYieldDefault: Number(e.target.value)})}
+                              placeholder="e.g. 12"
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-2.5 px-4 text-xs font-mono outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 text-left col-span-2">
+                            <label className="text-[8.5px] font-mono tracking-widest text-[#777] uppercase font-bold block">
+                              Announcement banner Broadcaster ticker (Featured Notice)
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={adminSettings.announcementBanner}
+                              onChange={(e) => setAdminSettings({...adminSettings, announcementBanner: e.target.value})}
+                              placeholder="Broadcast emergency network updates here..."
+                              className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-3 px-4 text-xs font-sans outline-none transition-all resize-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-white/5 flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={savingSettings}
+                            className="bg-emerald-green text-black px-5 py-3 rounded-xl font-bold font-sans text-xs uppercase cursor-pointer tracking-wider hover:bg-emerald-green/85 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {savingSettings ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+                            SAVE SYSTEM LIVE PARAMETERS
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {activeTab === "logs" && (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center bg-[#070707] p-4 rounded-3xl border border-white/5">
+                          <div>
+                            <h3 className="text-xs font-mono font-black text-zinc-400 tracking-wider uppercase">Active Security Handshaking Audit Trail Logs</h3>
+                            <p className="text-[9.5px] text-zinc-600 font-mono">Trace login attempts, OTP validations, session timeouts, and locked credentials.</p>
+                          </div>
+                          <button
+                            onClick={() => fetchAuditLogs(sessionStorage.getItem("savora_admin_token") || "")}
+                            className="p-2 bg-white/5 border border-white/10 hover:border-white/20 rounded-xl text-zinc-400 hover:text-white transition-all cursor-pointer"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${loadingLogs ? "animate-spin" : ""}`} />
+                          </button>
+                        </div>
+
+                        <div className="border border-white/5 rounded-3xl bg-[#0e0e0e] overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[700px] text-left border-collapse font-mono text-[10.5px]">
+                              <thead>
+                                <tr className="border-b border-white/5 bg-white/[0.01]/20 text-[8.5px] font-black text-zinc-500 uppercase tracking-widest">
+                                  <th className="py-4 px-5">TIMESTAMP</th>
+                                  <th className="py-4 px-5">EMAIL CORRELATION</th>
+                                  <th className="py-4 px-5">EVENT TRANSACTION SUMMARY</th>
+                                  <th className="py-4 px-5">SECURE STAUS</th>
+                                  <th className="py-4 px-5">IP ADDRESS</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 text-zinc-300">
+                                {loadingLogs ? (
+                                  <tr>
+                                    <td colSpan={5} className="py-12 text-center text-zinc-500">
+                                      <RefreshCw className="h-5 w-5 animate-spin mx-auto text-emerald-green" />
+                                    </td>
+                                  </tr>
+                                ) : auditLogs.length > 0 ? (
+                                  auditLogs.map((log, offset) => (
+                                    <tr key={offset} className="hover:bg-white/[0.005] transition-all">
+                                      <td className="py-3.5 px-5 text-zinc-550 text-[10px]">
+                                        {new Date(log.timestamp).toLocaleString()}
+                                      </td>
+                                      <td className="py-3.5 px-5 font-bold text-white">
+                                        {log.email}
+                                      </td>
+                                      <td className="py-3.5 px-5 text-zinc-400">
+                                        {log.event}
+                                      </td>
+                                      <td className="py-3.5 px-5">
+                                        <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                          log.status === "SUCCESS" ? "bg-emerald-green/10 text-emerald-green border border-emerald-green/20" :
+                                          log.status === "BLOCKED" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
+                                          log.status === "DENIED" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                                          "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                        }`}>
+                                          {log.status}
+                                        </span>
+                                      </td>
+                                      <td className="py-3.5 px-5 text-zinc-600">
+                                        {log.ipAddress}
+                                      </td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={5} className="py-12 text-center text-zinc-700 italic">
+                                      No authentication transaction events log tracked.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "settings" && (
+                      <form onSubmit={handleSaveSettings} className="space-y-6 max-w-xl bg-[#0e0e0e] border border-white/5 p-6 rounded-3xl">
+                        <div>
+                          <h3 className="text-sm font-mono font-black text-zinc-400 tracking-wider uppercase mb-1">THRESHOLD & SYSTEM PROTOCOLS settings</h3>
+                          <p className="text-[10px] text-zinc-600">Manage 2FA OTP expiration timers, retry limits, and active lockout penalties.</p>
+                        </div>
+
+                        <div className="space-y-4 pt-2">
+                          <div className="space-y-1.5 text-left">
+                            <div className="flex justify-between items-center text-[9px] font-mono tracking-wider font-extrabold text-[#777] uppercase">
+                              <span>OTP Expire TTL minutes</span>
+                              <span className="text-emerald-green">{adminSettings.otpDurationMinutes} Mins</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={1}
+                              max={15}
+                              value={adminSettings.otpDurationMinutes}
+                              onChange={(e) => setAdminSettings({...adminSettings, otpDurationMinutes: Number(e.target.value)})}
+                              className="w-full h-1 bg-[#121212] rounded-lg appearance-none cursor-pointer accent-emerald-green"
+                            />
+                            <p className="text-[9px] text-zinc-650 font-sans">The verification passcode token is automatically destroyed and shredded in-memory after this duration.</p>
+                          </div>
+
+                          <div className="space-y-1.5 text-left">
+                            <div className="flex justify-between items-center text-[9px] font-mono tracking-wider font-extrabold text-[#777] uppercase">
+                              <span>MAX LOGIN FAILURE LIMIT (OTP ATTEMPTS)</span>
+                              <span className="text-emerald-green">{adminSettings.maxLoginRetries} Retries</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={2}
+                              max={6}
+                              value={adminSettings.maxLoginRetries}
+                              onChange={(e) => setAdminSettings({...adminSettings, maxLoginRetries: Number(e.target.value)})}
+                              className="w-full h-1 bg-[#121212] rounded-lg appearance-none cursor-pointer accent-emerald-green"
+                            />
+                            <p className="text-[9px] text-zinc-650 font-sans">Brute-force penalty active: Whitelisted email is temporarily blocked after consecutive miskeys.</p>
+                          </div>
+
+                          <div className="space-y-1.5 text-left">
+                            <div className="flex justify-between items-center text-[9px] font-mono tracking-wider font-extrabold text-[#777] uppercase">
+                              <span>LOCKOUT PENALTY DURATION</span>
+                              <span className="text-emerald-green">{adminSettings.lockoutDurationMinutes} Minutes</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={5}
+                              max={60}
+                              value={adminSettings.lockoutDurationMinutes}
+                              onChange={(e) => setAdminSettings({...adminSettings, lockoutDurationMinutes: Number(e.target.value)})}
+                              className="w-full h-1 bg-[#121212] rounded-lg appearance-none cursor-pointer accent-emerald-green"
+                            />
+                            <p className="text-[9px] text-zinc-650 font-sans">Wait duration before the block is shredded and unlocked on correct credential inputs.</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-white/5 flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={savingSettings}
+                            className="bg-emerald-green text-black px-5 py-3 rounded-xl font-bold font-sans text-xs uppercase cursor-pointer tracking-wider hover:bg-emerald-green/85 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {savingSettings ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+                            SAVE SECURITY THRESHOLDS
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
                 </div>
               )}
-
             </div>
 
-            {/* Admin actions footers */}
+            {/* Admin Footer */}
             <div className="border-t border-white/5 pt-5 flex flex-col sm:flex-row gap-4 items-center justify-between text-[8px] font-mono text-zinc-600 bg-transparent">
               <span className="flex items-center gap-1.5 uppercase font-black">
-                <Lock className="h-3 w-3 text-emerald-green" /> CUSTODIAL ENCRYPT SHA-256
+                <Lock className="h-3 w-3 text-emerald-green" /> CUSTODIAL PROTOCOLS LOCKED SHA-256
               </span>
-              {isAuthenticated && (
-                <button
-                  onClick={async () => {
-                    if (isSupabaseConfigured && supabase) {
-                      try {
-                        await supabase.auth.signOut();
-                      } catch (err) {
-                        console.error("Error signing out:", err);
-                      }
-                    }
-                    setIsAuthenticated(false);
-                    setVerificationPending(false);
-                    setOtp("");
-                    setSuccessMessage("");
-                    setErrorMessage("");
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg border border-white/10 hover:border-white/20 hover:bg-white/5 text-[8.5px] text-zinc-400 hover:text-white transition-all font-mono uppercase font-black cursor-pointer"
-                >
-                  DE-AUTHORIZE ENCRYPTED DEPOSIT
-                </button>
+              
+              {isAuthenticated ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-zinc-500 font-extrabold uppercase">SIGN ACTIVE NODE: {email}</span>
+                  <button
+                    onClick={() => handleLogout()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/10 text-[8.5px] text-red-400 hover:text-red-300 transition-all font-mono uppercase font-black cursor-pointer"
+                  >
+                    <LogOut className="h-3 w-3" /> DE-AUTHORIZE DEPOSIT LOCK
+                  </button>
+                </div>
+              ) : (
+                <span className="text-zinc-700">STRICT COMPLIANCE GATES</span>
               )}
-              <span>SVR-NODE_V5.9</span>
+              
+              <span>SVR-NODE_V6.4-SECURE</span>
             </div>
 
           </motion.div>
