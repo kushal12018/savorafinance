@@ -115,9 +115,9 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
   const [demoRecords, setDemoRecords] = useState<WaitlistRecord[]>([
     {
       id: 1,
-      full_name: "Kushal Chandak",
+      full_name: "Ssonvir Chauhan",
       mobile_number: "+91 99112 23344",
-      email_id: "ckushal120@gmail.com",
+      email_id: "ssonvir459@gmail.com",
       queue_position: 12904,
       secure_code: "SAV-NODE-XF98A1",
       created_at: new Date().toISOString()
@@ -126,7 +126,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
       id: 2,
       full_name: "Savora Private User",
       mobile_number: "+91 98223 34455",
-      email_id: "savorafinanceprivatelimited@gmail.com",
+      email_id: "sonvirchauhan09@gmail.com",
       queue_position: 13180,
       secure_code: "SAV-NODE-ZB029P",
       created_at: new Date(Date.now() - 3600000).toISOString()
@@ -201,10 +201,16 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
   // Validate session on load
   useEffect(() => {
     if (isOpen) {
+      // Clear email input so that no email is seen right after opening the admin panel
+      setEmail("");
+      setToken("");
+
       const savedToken = sessionStorage.getItem("savora_admin_token");
       const savedEmail = sessionStorage.getItem("savora_admin_email");
 
-      if (savedToken && savedEmail) {
+      // Verify that any restored session matches the strict whitelist
+      const Whitelist = ["ssonvir459@gmail.com", "ssonvir459@gmil.com", "sonvirchauhan09@gmail.com"];
+      if (savedToken && savedEmail && Whitelist.includes(savedEmail.trim().toLowerCase())) {
         const checkSession = async () => {
           try {
             const res = await fetch("/api/supabase/admin/validate-session", {
@@ -214,10 +220,10 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
             });
             const data = await res.json();
             
-            if (data.success) {
+            if (data.success && Whitelist.includes(data.email?.toLowerCase())) {
               setEmail(data.email);
               setIsAuthenticated(true);
-              setSuccessMessage("INTEGRITY COMPIRMED: Sovereign dynamic security handshake authenticated.");
+              setSuccessMessage("INTEGRITY CONFIRMED: Sovereign dynamic security handshake authenticated.");
               setSessionTimeRemaining(data.expiresInSeconds || 1800);
               
               // Synchronize configurations and records
@@ -229,19 +235,17 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
               startSessionCountdown(data.expiresInSeconds || 1800);
               setupActivityTracker(savedToken);
             } else {
-              // Session stale on server
               handleLogout();
             }
           } catch (err) {
             console.error("Failed session alignment verification:", err);
-            // Non-blocking fallback for offline
-            setEmail(savedEmail);
-            setIsAuthenticated(true);
-            setRecords(demoRecords);
-            startSessionCountdown(1800);
+            handleLogout();
           }
         };
         checkSession();
+      } else {
+        // Clear old sessions if they do not match the new whitelist
+        handleLogout();
       }
     }
 
@@ -339,7 +343,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
     const targetEmail = email.trim().toLowerCase();
     
     // Whitelist defense right on the client side
-    const Whitelist = ["ckushal120@gmail.com", "savorafinanceprivatelimited@gmail.com"];
+    const Whitelist = ["ssonvir459@gmail.com", "ssonvir459@gmil.com", "sonvirchauhan09@gmail.com"];
     if (!Whitelist.includes(targetEmail)) {
       setErrorMessage("ACCESS COMPROMISED: This email address is not registered as an authorized custodian under Savora guidelines.");
       return;
@@ -657,7 +661,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                               required
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
-                              placeholder="e.g. ckushal120@gmail.com"
+                              placeholder="e.g. ssonvir459@gmail.com"
                               className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-sans placeholder-zinc-700 outline-none transition-all"
                             />
                           </div>

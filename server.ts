@@ -35,8 +35,9 @@ if (!isSupabaseConfigured) {
 
 // Allowed admin whitelist parameters - Strictly restricted as requested
 const PERMITTED_ADMINS = [
-  "ckushal120@gmail.com",
-  "savorafinanceprivatelimited@gmail.com"
+  "ssonvir459@gmail.com",
+  "ssonvir459@gmil.com",
+  "sonvirchauhan09@gmail.com"
 ];
 
 // Memory-based security storage
