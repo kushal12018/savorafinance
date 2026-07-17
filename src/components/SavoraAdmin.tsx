@@ -117,7 +117,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
       id: 1,
       full_name: "Ssonvir Chauhan",
       mobile_number: "+91 99112 23344",
-      email_id: "ssonvir459@gmail.com",
+      email_id: "ssonvir.chauhan@savora.wealth",
       queue_position: 12904,
       secure_code: "SAV-NODE-XF98A1",
       created_at: new Date().toISOString()
@@ -126,7 +126,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
       id: 2,
       full_name: "Savora Private User",
       mobile_number: "+91 98223 34455",
-      email_id: "sonvirchauhan09@gmail.com",
+      email_id: "private.user@savora.wealth",
       queue_position: 13180,
       secure_code: "SAV-NODE-ZB029P",
       created_at: new Date(Date.now() - 3600000).toISOString()
@@ -661,7 +661,7 @@ export default function SavoraAdmin({ isOpen, onClose }: SavoraAdminProps) {
                               required
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
-                              placeholder="e.g. ssonvir459@gmail.com"
+                              placeholder="e.g. admin@savora.wealth"
                               className="w-full bg-[#121212] border border-white/5 focus:border-emerald-green/40 focus:bg-[#151515] text-white rounded-xl py-3 px-10 text-xs font-sans placeholder-zinc-700 outline-none transition-all"
                             />
                           </div>
